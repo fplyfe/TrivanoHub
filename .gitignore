@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+next-env.d.ts
+backups/
+certbot/
+.DS_Store
+npm-debug.log*
+LOGINS.txt

@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env
+.env.*
+backups
+certbot
+docs
+*.md
+LOGINS.txt
+subir*.bat
+subir*.ps1

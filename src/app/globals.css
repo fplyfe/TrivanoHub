@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 150 8% 96%;
+    --foreground: 169 20% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 169 20% 11%;
+    --primary: 169 44% 21%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 158 19% 92%;
+    --secondary-foreground: 169 20% 15%;
+    --muted: 158 15% 93%;
+    --muted-foreground: 168 12% 34%;
+    --accent: 158 19% 88%;
+    --accent-foreground: 169 44% 21%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 62% 36%;
+    --border: 160 10% 86%;
+    --input: 160 10% 80%;
+    --ring: 169 44% 21%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 169 25% 7%;
+    --foreground: 150 10% 94%;
+    --card: 169 22% 10%;
+    --card-foreground: 150 10% 94%;
+    --primary: 167 40% 52%;
+    --primary-foreground: 169 30% 8%;
+    --secondary: 169 18% 16%;
+    --secondary-foreground: 150 10% 94%;
+    --muted: 169 18% 14%;
+    --muted-foreground: 160 8% 66%;
+    --accent: 169 30% 18%;
+    --accent-foreground: 158 40% 82%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 55% 50%;
+    --border: 169 15% 18%;
+    --input: 169 15% 22%;
+    --ring: 167 40% 52%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  /* Escala proporcional: tudo em rem cresce junto em monitores grandes */
+  html {
+    font-size: 16px;
+  }
+  @media (min-width: 1536px) {
+    html { font-size: 17px; }
+  }
+  @media (min-width: 1920px) {
+    html { font-size: 18px; }
+  }
+  @media (min-width: 2560px) {
+    html { font-size: 20px; }
+  }
+  body {
+    overflow-x: hidden;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+  h1,
+  h2,
+  .font-brand {
+    font-family: "Outfit", "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "tnum";
+  }
+  input[type="color"] {
+    @apply h-9 w-12 cursor-pointer rounded-md border border-input bg-transparent p-1;
+  }
+}

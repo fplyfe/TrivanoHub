@@ -1,0 +1,8 @@
+# Override para rodar no PC (sem Nginx/HTTPS/certbot).
+# Uso: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build db migrate app
+services:
+  app:
+    environment:
+      COOKIE_SECURE: "false"
+    ports:
+      - "127.0.0.1:3000:3000"

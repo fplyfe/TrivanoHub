@@ -1,0 +1,9 @@
+# Proxy com HTTPS automático (Let's Encrypt). O domínio vem da variável DOMAIN do .env.
+{$DOMAIN} {
+	encode gzip zstd
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	reverse_proxy app:3000
+}

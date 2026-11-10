@@ -1,0 +1,386 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum TaxRegime {
+  SIMPLES
+  MEI
+  MANUAL
+}
+
+enum ListingType {
+  CLASSICO
+  PREMIUM
+}
+
+enum SaleStatus {
+  OK
+  CANCELED
+}
+
+enum StockMoveType {
+  IN
+  OUT
+  ADJUST
+}
+
+enum AccountType {
+  BANK
+  MARKETPLACE
+  CASH
+}
+
+enum EntryType {
+  INCOME
+  EXPENSE
+}
+
+/// Grupo da categoria no resultado do mês
+enum CategoryGroup {
+  SALES // recebimentos de vendas (já contados nas vendas)
+  OTHER_INCOME // outras receitas
+  FIXED // despesas fixas (aluguel, sistemas, contador...)
+  VARIABLE // despesas variáveis (ads, embalagens avulsas...)
+  PURCHASE // compra de mercadoria (vira estoque, não é despesa)
+  TAX // DAS / impostos (já estimados nas vendas)
+  OWNER // retirada dos sócios
+}
+
+enum InvestmentKind {
+  APPLICATION // aplicação financeira
+  BUSINESS // investimento no negócio
+}
+
+enum InvestmentMoveType {
+  CONTRIBUTION
+  WITHDRAWAL
+  VALUATION
+}
+
+enum QuoteStatus {
+  OPEN
+  APPROVED
+  CANCELED
+}
+
+enum ProductStage {
+  CANDIDATE // em pesquisa, ainda não comprado
+  TESTING // comprado e anunciado, em validação
+  APPROVED // aprovado no teste
+  CHAMPION // campeão (Full, mais Ads)
+  PAUSED // parado / descontinuado
+}
+
+enum PhaseGoal {
+  TOTAL_ORDERS // nº de vendas acumuladas desde o início da fase
+  MONTHLY_REVENUE // faturamento em um mês dentro da fase
+  NONE // só checklist
+}
+
+enum StepStatus {
+  TODO
+  DOING
+  DONE
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String
+  email          String    @unique
+  passwordHash   String
+  role           Role      @default(MEMBER)
+  active         Boolean   @default(true)
+  sessionVersion Int       @default(0)
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+/// Linha única (id = 1) com as configurações da empresa
+model Settings {
+  id            Int       @id @default(1)
+  companyName   String    @default("Minha loja")
+  regime        TaxRegime @default(SIMPLES)
+  /// Alíquota usada quando o regime é MANUAL (em %)
+  manualTaxRate Decimal   @default(0) @db.Decimal(7, 4)
+  /// Receita dos últimos 12 meses informada à mão (se nulo, o sistema calcula pelas vendas)
+  rbt12Override Decimal?  @db.Decimal(14, 2)
+  /// Margem mínima aceitável (em %) para alertas
+  minMargin     Decimal   @default(10) @db.Decimal(7, 4)
+  /// Meta do plano (faturamento acumulado) e mês de início/fim
+  planTarget    Decimal   @default(500000) @db.Decimal(14, 2)
+  planStart     String    @default("2026-12")
+  planEnd       String    @default("2027-12")
+  updatedAt     DateTime  @updatedAt
+}
+
+model Channel {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  commissionClassic Decimal  @default(12) @db.Decimal(7, 4)
+  commissionPremium Decimal  @default(17) @db.Decimal(7, 4)
+  /// Tarifa por unidade cobrada abaixo do limite de preço (ex.: R$ 6,50 abaixo de R$ 79)
+  fixedFee          Decimal  @default(0) @db.Decimal(14, 2)
+  fixedFeeThreshold Decimal  @default(79) @db.Decimal(14, 2)
+  /// Percentual estimado de anúncios pagos sobre a venda
+  adsRate           Decimal  @default(0) @db.Decimal(7, 4)
+  /// Dias até o dinheiro ser liberado
+  releaseDays       Int      @default(0)
+  accountId         String?
+  account           Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  active            Boolean  @default(true)
+  sales             Sale[]
+}
+
+model Supplier {
+  id        String       @id @default(cuid())
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  leadDays  Int?
+  notes     String?
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  products  Product[]
+  offers    QuoteOffer[]
+  entries   Entry[]
+}
+
+model Product {
+  id              String      @id @default(cuid())
+  sku             String      @unique
+  name            String
+  /// Custo médio unitário
+  cost            Decimal     @default(0) @db.Decimal(14, 2)
+  /// Embalagem e insumos por unidade
+  packaging       Decimal     @default(0) @db.Decimal(14, 2)
+  /// Frete médio pago pelo vendedor por unidade (estimativa)
+  shipping        Decimal     @default(0) @db.Decimal(14, 2)
+  /// Preço de venda atual (referência)
+  price           Decimal     @default(0) @db.Decimal(14, 2)
+  stock           Int         @default(0)
+  stage           ProductStage @default(TESTING)
+  /// Peso em gramas (filtro do produto ideal)
+  weightG         Int?
+  /// Exige certificação (ANATEL, INMETRO, ANVISA) ou marca de terceiros
+  needsCert       Boolean     @default(false)
+  testStartedAt   DateTime?   @db.Date
+  researchNotes   String?
+  minStock        Int         @default(0)
+  supplierId      String?
+  supplier        Supplier?   @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  sales           Sale[]
+  moves           StockMove[]
+  quotes          Quote[]
+  adSpends        AdSpend[]
+}
+
+model StockMove {
+  id        String        @id @default(cuid())
+  productId String
+  product   Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type      StockMoveType
+  /// Quantidade com sinal (+ entra, − sai)
+  qty       Int
+  unitCost  Decimal?      @db.Decimal(14, 2)
+  note      String?
+  date      DateTime      @db.Date
+  createdAt DateTime      @default(now())
+}
+
+model Sale {
+  id          String      @id @default(cuid())
+  date        DateTime    @db.Date
+  channelId   String
+  channel     Channel     @relation(fields: [channelId], references: [id])
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id])
+  listingType ListingType @default(CLASSICO)
+  qty         Int
+  /// Preço unitário
+  price       Decimal     @db.Decimal(14, 2)
+  gross       Decimal     @db.Decimal(14, 2)
+  commission  Decimal     @db.Decimal(14, 2)
+  fixedFee    Decimal     @db.Decimal(14, 2)
+  shipping    Decimal     @db.Decimal(14, 2)
+  ads         Decimal     @db.Decimal(14, 2)
+  taxRate     Decimal     @db.Decimal(7, 4)
+  tax         Decimal     @db.Decimal(14, 2)
+  cost        Decimal     @db.Decimal(14, 2)
+  packaging   Decimal     @db.Decimal(14, 2)
+  profit      Decimal     @db.Decimal(14, 2)
+  status      SaleStatus  @default(OK)
+  externalId  String?
+  note        String?
+  createdAt   DateTime    @default(now())
+  entries     Entry[]
+
+  @@index([date])
+}
+
+model Account {
+  id             String       @id @default(cuid())
+  name           String       @unique
+  type           AccountType  @default(BANK)
+  initialBalance Decimal      @default(0) @db.Decimal(14, 2)
+  active         Boolean      @default(true)
+  entries        Entry[]
+  channels       Channel[]
+  moves          InvestmentMove[]
+}
+
+model Category {
+  id      String        @id @default(cuid())
+  name    String
+  type    EntryType
+  group   CategoryGroup
+  entries Entry[]
+
+  @@unique([name, type])
+}
+
+model Entry {
+  id          String    @id @default(cuid())
+  type        EntryType
+  description String
+  amount      Decimal   @db.Decimal(14, 2)
+  /// Data de competência / vencimento
+  date        DateTime  @db.Date
+  paid        Boolean   @default(false)
+  paidAt      DateTime? @db.Date
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  saleId      String?
+  sale        Sale?     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  adSpend     AdSpend?
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  @@index([date])
+}
+
+model Investment {
+  id        String           @id @default(cuid())
+  name      String
+  kind      InvestmentKind   @default(APPLICATION)
+  notes     String?
+  active    Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  moves     InvestmentMove[]
+}
+
+model InvestmentMove {
+  id           String             @id @default(cuid())
+  investmentId String
+  investment   Investment         @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  type         InvestmentMoveType
+  amount       Decimal            @db.Decimal(14, 2)
+  date         DateTime           @db.Date
+  /// Conta debitada (aporte) ou creditada (resgate)
+  accountId    String?
+  account      Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  note         String?
+  createdAt    DateTime           @default(now())
+}
+
+model Quote {
+  id        String       @id @default(cuid())
+  productId String
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty       Int
+  status    QuoteStatus  @default(OPEN)
+  note      String?
+  createdAt DateTime     @default(now())
+  offers    QuoteOffer[]
+}
+
+model QuoteOffer {
+  id         String   @id @default(cuid())
+  quoteId    String
+  quote      Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  unitPrice  Decimal  @db.Decimal(14, 2)
+  /// Frete total da compra
+  freight    Decimal  @default(0) @db.Decimal(14, 2)
+  leadDays   Int?
+  terms      String?
+  chosen     Boolean  @default(false)
+}
+
+model MonthlyGoal {
+  id      String  @id @default(cuid())
+  /// "AAAA-MM"
+  month   String  @unique
+  profit  Decimal @db.Decimal(14, 2)
+  revenue Decimal @default(0) @db.Decimal(14, 2)
+  orders  Int     @default(0)
+}
+
+model GrowthStep {
+  id          String     @id @default(cuid())
+  channel     String
+  position    Int
+  title       String
+  description String?
+  status      StepStatus @default(TODO)
+  owner       String?
+  dueDate     DateTime?  @db.Date
+  phaseId     String?
+  phase       PlanPhase? @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+}
+
+/// Gasto semanal de Ads de um produto (copiado do painel do Mercado Ads)
+model AdSpend {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Segunda-feira da semana
+  weekStart   DateTime @db.Date
+  spend       Decimal  @db.Decimal(14, 2)
+  /// Vendas atribuídas aos anúncios (R$)
+  adSales     Decimal  @default(0) @db.Decimal(14, 2)
+  adOrders    Int      @default(0)
+  impressions Int?
+  clicks      Int?
+  /// Lançamento no Caixa gerado para este gasto
+  entryId     String?  @unique
+  entry       Entry?   @relation(fields: [entryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@unique([productId, weekStart])
+}
+
+/// Fases do plano, cada uma com um portão (meta) para avançar
+model PlanPhase {
+  id          String       @id @default(cuid())
+  position    Int
+  name        String
+  startMonth  String
+  endMonth    String
+  goalType    PhaseGoal    @default(NONE)
+  goalValue   Decimal      @default(0) @db.Decimal(14, 2)
+  /// Critério extra checado à mão (ex.: reputação verde)
+  manualGate  String?
+  manualOk    Boolean      @default(false)
+  completedAt DateTime?    @db.Date
+  steps       GrowthStep[]
+}

@@ -187,6 +187,7 @@ model Product {
   moves           StockMove[]
   quotes          Quote[]
   adSpends        AdSpend[]
+  adDaily         AdDaily[]
 }
 
 model StockMove {
@@ -383,4 +384,49 @@ model PlanPhase {
   manualOk    Boolean      @default(false)
   completedAt DateTime?    @db.Date
   steps       GrowthStep[]
+}
+
+enum AdSource {
+  META
+  MERCADO_ADS
+  GOOGLE
+  TIKTOK
+  OTHER
+}
+
+/// Desempenho diário por campanha, vindo das integrações (Meta) ou da API de entrada (n8n, Make, scripts)
+model AdDaily {
+  id            String   @id @default(cuid())
+  date          DateTime @db.Date
+  source        AdSource
+  /// Conta de anúncios na plataforma (ex.: act_123)
+  accountId     String   @default("")
+  campaignId    String
+  campaignName  String
+  status        String?
+  spend         Decimal  @default(0) @db.Decimal(14, 2)
+  impressions   Int      @default(0)
+  clicks        Int      @default(0)
+  /// Compras e valor das compras informados pela plataforma (atribuição dela)
+  purchases     Int      @default(0)
+  purchaseValue Decimal  @default(0) @db.Decimal(14, 2)
+  /// Produto ligado à campanha (opcional; permite filtrar o dashboard por produto)
+  productId     String?
+  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  updatedAt     DateTime @updatedAt
+
+  @@unique([source, campaignId, date])
+  @@index([date])
+}
+
+/// Configuração de integrações (token guardado criptografado)
+model Integration {
+  id          String    @id
+  /// Configuração não secreta (contas, versão da API...)
+  config      Json      @default("{}")
+  /// Segredo criptografado (AES-256-GCM com chave derivada do AUTH_SECRET)
+  secret      String?
+  lastSyncAt  DateTime?
+  lastError   String?
+  updatedAt   DateTime  @updatedAt
 }

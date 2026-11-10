@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  BarChart3,
   Calculator,
+  ChevronDown,
   ClipboardList,
   Filter,
   Flag,
@@ -18,6 +20,7 @@ import {
   Moon,
   Package,
   Percent,
+  PlugZap,
   Settings,
   ShoppingCart,
   Sun,
@@ -29,23 +32,67 @@ import { cn } from "@/lib/utils";
 import { TrivanoLogo } from "./logo";
 import { Button } from "@/components/ui/button";
 
-const NAV = [
-  { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
-  { href: "/sales", label: "Vendas", icon: ShoppingCart },
-  { href: "/plan", label: "Plano R$ 500 mil", icon: Map },
-  { href: "/funnel", label: "Funil de produtos", icon: Filter },
-  { href: "/ads", label: "Ads", icon: Megaphone },
-  { href: "/calculator", label: "Calculadora", icon: Calculator },
-  { href: "/products", label: "Produtos e estoque", icon: Package },
-  { href: "/suppliers", label: "Fornecedores", icon: Truck },
-  { href: "/quotes", label: "Cotações", icon: ClipboardList },
-  { href: "/cash", label: "Caixa", icon: Landmark },
-  { href: "/taxes", label: "Impostos", icon: Percent },
-  { href: "/investments", label: "Investimentos", icon: LineChart },
-  { href: "/goals", label: "Metas e escala", icon: Flag },
-  { href: "/users", label: "Usuários", icon: Users },
-  { href: "/settings", label: "Configurações", icon: Settings },
+type Item = { href: string; label: string; icon: typeof LayoutDashboard };
+type Group = { id: string; label: string; items: Item[] };
+
+/** Menu agrupado por área. Cada grupo abre e fecha; o grupo da página atual abre sozinho. */
+const GROUPS: Group[] = [
+  { id: "inicio", label: "Início", items: [{ href: "/dashboard", label: "Painel", icon: LayoutDashboard }] },
+  {
+    id: "vendas",
+    label: "Vendas",
+    items: [
+      { href: "/sales", label: "Vendas", icon: ShoppingCart },
+      { href: "/calculator", label: "Calculadora", icon: Calculator },
+    ],
+  },
+  {
+    id: "marketing",
+    label: "Marketing e Ads",
+    items: [
+      { href: "/marketing", label: "Dashboard de Ads", icon: BarChart3 },
+      { href: "/ads", label: "Ads por produto", icon: Megaphone },
+      { href: "/integrations", label: "Integrações", icon: PlugZap },
+    ],
+  },
+  {
+    id: "produtos",
+    label: "Produtos e compras",
+    items: [
+      { href: "/funnel", label: "Funil de produtos", icon: Filter },
+      { href: "/products", label: "Produtos e estoque", icon: Package },
+      { href: "/suppliers", label: "Fornecedores", icon: Truck },
+      { href: "/quotes", label: "Cotações", icon: ClipboardList },
+    ],
+  },
+  {
+    id: "financeiro",
+    label: "Financeiro",
+    items: [
+      { href: "/cash", label: "Caixa", icon: Landmark },
+      { href: "/taxes", label: "Impostos", icon: Percent },
+      { href: "/investments", label: "Investimentos", icon: LineChart },
+    ],
+  },
+  {
+    id: "crescimento",
+    label: "Crescimento",
+    items: [
+      { href: "/plan", label: "Plano R$ 500 mil", icon: Map },
+      { href: "/goals", label: "Metas e escala", icon: Flag },
+    ],
+  },
+  {
+    id: "admin",
+    label: "Administração",
+    items: [
+      { href: "/users", label: "Usuários", icon: Users },
+      { href: "/settings", label: "Configurações", icon: Settings },
+    ],
+  },
 ];
+
+const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -69,25 +116,66 @@ function ThemeToggle() {
   );
 }
 
+const STORE_KEY = "nav-collapsed";
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  // Grupos recolhidos pelo usuário (lembrados neste navegador)
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) setCollapsed(JSON.parse(raw));
+    } catch {}
+  }, []);
+  const toggle = (id: string) => {
+    const next = collapsed.includes(id) ? collapsed.filter((x) => x !== id) : [...collapsed, id];
+    setCollapsed(next);
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(next));
+    } catch {}
+  };
+
   return (
-    <nav className="grid gap-1">
-      {NAV.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href || pathname.startsWith(href + "/");
+    <nav className="grid gap-3">
+      {GROUPS.map((g) => {
+        const hasActive = g.items.some((i) => isActive(pathname, i.href));
+        const open = hasActive || !collapsed.includes(g.id);
+        const single = g.items.length === 1;
         return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-              active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+          <div key={g.id} className="grid gap-0.5">
+            {!single && (
+              <button
+                type="button"
+                onClick={() => toggle(g.id)}
+                aria-expanded={open}
+                className="flex items-center justify-between rounded-md px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+              >
+                {g.label}
+                <ChevronDown className={cn("size-3.5 transition-transform", !open && "-rotate-90")} />
+              </button>
             )}
-          >
-            <Icon className="size-4" />
-            {label}
-          </Link>
+            {open &&
+              g.items.map(({ href, label, icon: Icon }) => {
+                const active = isActive(pathname, href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                      !single && "ml-1",
+                      active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    {label}
+                  </Link>
+                );
+              })}
+          </div>
         );
       })}
     </nav>

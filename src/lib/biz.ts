@@ -171,7 +171,7 @@ export async function accountBalances() {
 /** Resultado do mês: vendas (lucro já líquido de tarifas, imposto e custo) menos despesas do mês. */
 export async function monthSummary(ym: string) {
   const { start, end } = monthRange(ym);
-  const [sales, expenses, otherIncome, owner] = await Promise.all([
+  const [sales, expenses, otherIncome, owner, adDaily] = await Promise.all([
     db.sale.aggregate({
       where: { status: "OK", date: { gte: start, lt: end } },
       _sum: { gross: true, commission: true, fixedFee: true, shipping: true, ads: true, tax: true, cost: true, packaging: true, profit: true, qty: true },
@@ -184,6 +184,8 @@ export async function monthSummary(ym: string) {
     }),
     db.entry.aggregate({ where: { type: "INCOME", date: { gte: start, lt: end }, category: { group: "OTHER_INCOME" } }, _sum: { amount: true } }),
     db.entry.aggregate({ where: { type: "EXPENSE", date: { gte: start, lt: end }, category: { group: "OWNER" } }, _sum: { amount: true } }),
+    // Gasto de Ads vindo das integrações (Meta, API de entrada, lançamento diário)
+    db.adDaily.aggregate({ where: { date: { gte: start, lt: end } }, _sum: { spend: true } }),
   ]);
   const s = sales._sum;
   const gross = n(s.gross);
@@ -192,7 +194,8 @@ export async function monthSummary(ym: string) {
   const tax = n(s.tax);
   const cogs = n(s.cost) + n(s.packaging);
   const contribution = n(s.profit);
-  const expensesTotal = expenses.reduce((a, e) => a + n(e._sum.amount), 0);
+  const adsDaily = n(adDaily._sum.spend);
+  const expensesTotal = expenses.reduce((a, e) => a + n(e._sum.amount), 0) + adsDaily;
   const other = n(otherIncome._sum.amount);
   const result = round2(contribution - expensesTotal + other);
   return {
@@ -206,6 +209,7 @@ export async function monthSummary(ym: string) {
     cogs: round2(cogs),
     contribution: round2(contribution),
     expenses: round2(expensesTotal),
+    adsDaily: round2(adsDaily),
     otherIncome: round2(other),
     result,
     margin: gross > 0 ? round2((result / gross) * 100) : 0,

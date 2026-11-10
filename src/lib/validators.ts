@@ -213,3 +213,44 @@ export const profileSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome").max(60),
   email,
 });
+
+export const AD_SOURCES = ["META", "MERCADO_ADS", "GOOGLE", "TIKTOK", "OTHER"] as const;
+
+export const metaConfigSchema = z.object({
+  /** Vazio = mantém o token já salvo */
+  token: z.preprocess((v) => (v === "" || v == null ? null : v), z.string().trim().min(20, "Token muito curto").max(1000).nullable()),
+  accounts: z.string().trim().min(1, "Informe ao menos uma conta de anúncios"),
+  version: z.string().trim().regex(/^v\d+\.\d+$/, "Versão no formato v26.0").default("v26.0"),
+  autoSync: z.boolean().default(true),
+});
+
+export const syncSchema = z.object({ since: dateStr.optional(), until: dateStr.optional() });
+
+const adRow = z.object({
+  date: dateStr,
+  source: z.enum(AD_SOURCES).default("OTHER"),
+  accountId: z.string().max(80).optional().default(""),
+  campaignId: z.string().trim().min(1).max(120),
+  campaignName: z.string().trim().min(1).max(200),
+  status: z.string().max(40).optional().nullable(),
+  spend: z.coerce.number().min(0).max(99_999_999),
+  impressions: z.coerce.number().int().min(0).default(0),
+  clicks: z.coerce.number().int().min(0).default(0),
+  purchases: z.coerce.number().int().min(0).default(0),
+  purchaseValue: z.coerce.number().min(0).default(0),
+  /** SKU do produto para ligar a campanha (opcional) */
+  sku: z.string().max(40).optional().nullable(),
+});
+export const ingestSchema = z.union([z.array(adRow).min(1).max(5000), z.object({ rows: z.array(adRow).min(1).max(5000) }).transform((o) => o.rows)]);
+
+export const manualAdSchema = z.object({
+  date: dateStr,
+  source: z.enum(AD_SOURCES),
+  campaignName: name(200),
+  spend: money0,
+  purchases: z.coerce.number().int().min(0).default(0),
+  purchaseValue: money0.default(0),
+  productId: optId,
+});
+
+export const linkCampaignSchema = z.object({ source: z.enum(AD_SOURCES), campaignId: z.string().min(1), productId: optId });

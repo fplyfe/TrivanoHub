@@ -51,9 +51,9 @@ cd /opt/trivanohub
 sudo bash scripts/instalar-vps.sh
 ```
 
-O script instala Docker, firewall (só portas 22, 80 e 443), atualizações automáticas de segurança e swap se faltar memória. Depois pergunta o domínio e os 3 usuários, gera senhas fortes, sobe tudo e mostra os logins.
+O script instala Docker, firewall (só portas 22, 80 e 443), atualizações automáticas de segurança e swap se faltar memória. Depois pergunta o domínio e o administrador, gera uma senha forte, sobe tudo e mostra o acesso.
 
-Acesse `https://seu-dominio`, entre e **troque as senhas** em Configurações. Depois apague o arquivo de logins: `rm /opt/trivanohub/LOGINS.txt`.
+Acesse `https://seu-dominio`, entre como administrador, **troque a senha** em Configurações e crie os outros usuários em **Usuários**. Depois apague o arquivo de logins: `rm /opt/trivanohub/LOGINS.txt`.
 
 ## Dia a dia
 

@@ -39,12 +39,8 @@ if [ ! -f .env ]; then
   read -rp "Domínio do app (ex.: hub.trivano.com.br): " DOMAIN
   read -rp "Nome do administrador: " U1N
   read -rp "E-mail do administrador: " U1E
-  read -rp "Nome do 2º usuário: " U2N
-  read -rp "E-mail do 2º usuário: " U2E
-  read -rp "Nome do 3º usuário: " U3N
-  read -rp "E-mail do 3º usuário: " U3E
   rnd() { openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c "$1"; }
-  P1=$(rnd 16); P2=$(rnd 16); P3=$(rnd 16)
+  P1=$(rnd 16)
   umask 077
   cat > .env <<ENV
 DOMAIN=$DOMAIN
@@ -55,20 +51,13 @@ AUTH_SECRET=$(openssl rand -base64 48 | tr -d '\n')
 USER1_NAME=$U1N
 USER1_EMAIL=$U1E
 USER1_PASSWORD=$P1
-USER2_NAME=$U2N
-USER2_EMAIL=$U2E
-USER2_PASSWORD=$P2
-USER3_NAME=$U3N
-USER3_EMAIL=$U3E
-USER3_PASSWORD=$P3
 ENV
   cat > LOGINS.txt <<TXT
-TrivanoHub - logins iniciais (troque as senhas no primeiro acesso e apague este arquivo)
-$U1E / $P1   (administrador)
-$U2E / $P2
-$U3E / $P3
+TrivanoHub - administrador inicial (troque a senha no primeiro acesso e apague este arquivo)
+$U1E / $P1
+Crie os outros usuários em Usuários, dentro do app.
 TXT
-  echo ".env criado. Logins em LOGINS.txt"
+  echo ".env criado. Acesso do administrador em LOGINS.txt"
 fi
 
 mkdir -p backups && chown 1000:1000 backups 2>/dev/null || true

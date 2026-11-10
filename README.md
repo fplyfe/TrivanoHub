@@ -5,7 +5,7 @@ Gestão simples de e-commerce (Mercado Livre, Amazon, loja própria) para uma eq
 ## Subir no Windows (Docker Desktop)
 
 1. Abra o Docker Desktop.
-2. Dê dois cliques em `subir.bat`. Na primeira vez ele cria o `.env` com senhas aleatórias e salva os acessos em `LOGINS.txt`.
+2. Dê dois cliques em `subir.bat`. Na primeira vez ele cria o `.env` com senhas aleatórias e salva o acesso do administrador em `LOGINS.txt` (os outros usuários são criados por ele, na tela Usuários).
 3. Acesse **http://localhost:3090**.
 
 Para atualizar depois de mudar o código, rode o `subir.bat` de novo: o banco é preservado (volume `gestorshop_pgdata`) e há backup diário em `./backups`.

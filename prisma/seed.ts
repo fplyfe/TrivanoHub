@@ -125,15 +125,15 @@ const SCHEDULE: [string, number][] = [
 ];
 
 async function main() {
-  // Usuários: criados apenas se não existirem (nunca sobrescreve senha existente)
-  for (const i of [1, 2, 3]) {
-    const email = process.env[`USER${i}_EMAIL`]?.toLowerCase();
-    const password = process.env[`USER${i}_PASSWORD`];
-    const name = process.env[`USER${i}_NAME`] ?? `Usuário ${i}`;
-    if (!email || !password) continue;
-    if (await db.user.findUnique({ where: { email } })) continue;
-    await db.user.create({ data: { name, email, role: i === 1 ? "ADMIN" : "MEMBER", passwordHash: await bcrypt.hash(password, 12) } });
-    console.log(`Usuário criado: ${email}`);
+  // Administrador inicial: criado só se ainda não houver nenhum usuário.
+  // Os demais usuários são criados por ele, na tela Usuários.
+  const email = process.env.USER1_EMAIL?.toLowerCase();
+  const password = process.env.USER1_PASSWORD;
+  if (email && password && (await db.user.count()) === 0) {
+    await db.user.create({
+      data: { name: process.env.USER1_NAME ?? "Administrador", email, role: "ADMIN", passwordHash: await bcrypt.hash(password, 12) },
+    });
+    console.log(`Administrador criado: ${email}`);
   }
 
   await db.settings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });

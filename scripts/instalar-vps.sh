@@ -46,7 +46,10 @@ if [ "$MODO" = traefik ] && [ ! -f .env ]; then
   CFG=$(docker inspect -f '{{join .Args " "}} {{join .Config.Cmd " "}} {{range $k, $v := .Config.Labels}}{{$k}} {{end}}' "$TRAEFIK_ID" 2>/dev/null || true)
   EP=$(grep -oE 'entrypoints\.[A-Za-z0-9_-]+\.address=:443' <<<"$CFG" | head -1 | cut -d. -f2 || true)
   CR=$(grep -oE 'certificatesresolvers\.[A-Za-z0-9_-]+' <<<"$CFG" | head -1 | cut -d. -f2 || true)
-  NET_SUG=$(tr ' ' '\n' <<<"$NETS" | grep -v '^$' | grep -vx bridge | head -1 || true)
+  # Prefere a rede compartilhada (ex.: traefik-proxy da Hostinger) à rede interna do projeto do Traefik
+  NET_SUG=$(tr ' ' '\n' <<<"$NETS" | grep -v '^$' | grep -vx bridge | grep -i proxy | head -1 || true)
+  [ -n "$NET_SUG" ] || NET_SUG=$(tr ' ' '\n' <<<"$NETS" | grep -v '^$' | grep -vx bridge | grep -v '_default$' | head -1 || true)
+  [ -n "$NET_SUG" ] || NET_SUG=$(tr ' ' '\n' <<<"$NETS" | grep -v '^$' | grep -vx bridge | head -1 || true)
   echo "Redes do Traefik: $NETS"
   read -rp "Rede Docker do Traefik [${NET_SUG:-traefik}]: " T_NET; T_NET=${T_NET:-${NET_SUG:-traefik}}
   read -rp "Entrypoint HTTPS [${EP:-websecure}]: " T_EP; T_EP=${T_EP:-${EP:-websecure}}

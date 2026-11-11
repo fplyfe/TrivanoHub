@@ -1,32 +1,16 @@
-# TrivanoHub para o Docker Manager da Hostinger (Compose manualmente), usando o Traefik da Hostinger.
-# Não compila nada na VPS: usa as imagens prontas que o GitHub Actions publica a cada push na main.
-#
-# ANTES DE CLICAR EM DEPLOY, troque os 5 valores marcados com TROQUE:
-#   1. a senha do banco (só letras e números, 32 ou mais)
-#   2. a chave secreta do login (32 ou mais caracteres)
-#   3. o domínio, na label "rule" do app
-#   4. nome, e-mail e senha do administrador (usados só na primeira vez)
-#
-# Atualizar depois: no painel, "Atualizar/Redeploy" do projeto (baixa a imagem nova),
-# ou automático pelo GitHub Actions (secrets VPS_* e VPS_APP_DIR = pasta do projeto).
-
-x-banco: &banco
-  POSTGRES_USER: trivano
-  POSTGRES_DB: trivano
-  POSTGRES_PASSWORD: TROQUE_senha_do_banco_so_letras_e_numeros   # TROQUE (1)
-
-x-app: &app
-  AUTH_SECRET: TROQUE_chave_secreta_com_32_ou_mais_caracteres     # TROQUE (2)
-  COOKIE_SECURE: "true"
-  APP_TZ: America/Sao_Paulo
-  TZ: America/Sao_Paulo
-
+# TrivanoHub para o Docker Manager da Hostinger: apague tudo no Editor YAML e cole este arquivo.
+# Usa as imagens prontas do ghcr.io (publicadas pelo GitHub Actions) e o Traefik da Hostinger.
+# Troque: SENHA_DO_BANCO (4 lugares, só letras e números), CHAVE_SECRETA_32_OU_MAIS,
+# nome/e-mail/SENHA_INICIAL_ADMIN do administrador e o domínio em Host(`...`).
+# Deixe a aba "Ambiente" vazia: tudo está aqui.
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      <<: *banco
+      POSTGRES_USER: trivano
+      POSTGRES_DB: trivano
+      POSTGRES_PASSWORD: SENHA_DO_BANCO
       TZ: America/Sao_Paulo
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -41,11 +25,10 @@ services:
     pull_policy: always
     restart: "no"
     environment:
-      <<: *banco
-      USER1_NAME: TROQUE Nome do Administrador                     # TROQUE (4)
-      USER1_EMAIL: troque@seudominio.com.br                        # TROQUE (4)
-      USER1_PASSWORD: TROQUE_senha_inicial_do_admin                # TROQUE (4)
-    command: ["sh", "-c", "export DATABASE_URL=\"postgresql://$$POSTGRES_USER:$$POSTGRES_PASSWORD@db:5432/$$POSTGRES_DB?schema=public\" && npx prisma db push --skip-generate && npx tsx prisma/seed.ts"]
+      DATABASE_URL: postgresql://trivano:SENHA_DO_BANCO@db:5432/trivano?schema=public
+      USER1_NAME: Nome do Administrador
+      USER1_EMAIL: admin@seudominio.com.br
+      USER1_PASSWORD: SENHA_INICIAL_ADMIN
     depends_on:
       db:
         condition: service_healthy
@@ -55,37 +38,41 @@ services:
     pull_policy: always
     restart: unless-stopped
     environment:
-      <<: [*banco, *app]
-    command: ["sh", "-c", "export DATABASE_URL=\"postgresql://$$POSTGRES_USER:$$POSTGRES_PASSWORD@db:5432/$$POSTGRES_DB?schema=public\" && exec node server.js"]
+      DATABASE_URL: postgresql://trivano:SENHA_DO_BANCO@db:5432/trivano?schema=public
+      AUTH_SECRET: CHAVE_SECRETA_32_OU_MAIS
+      COOKIE_SECURE: "true"
+      APP_TZ: America/Sao_Paulo
+      TZ: America/Sao_Paulo
     ports:
       - "127.0.0.1:3090:3000"
     networks:
       - default
       - traefik-proxy
     labels:
-      traefik.enable: "true"
-      traefik.docker.network: traefik-proxy
-      traefik.http.routers.trivanohub.rule: Host(`hub.seudominio.com.br`)   # TROQUE (3)
-      traefik.http.routers.trivanohub.entrypoints: websecure
-      traefik.http.routers.trivanohub.tls: "true"
-      traefik.http.routers.trivanohub.tls.certresolver: letsencrypt
-      traefik.http.services.trivanohub.loadbalancer.server.port: "3000"
+      - traefik.enable=true
+      - traefik.docker.network=traefik-proxy
+      - traefik.http.routers.trivanohub.rule=Host(`hub.seudominio.com.br`)
+      - traefik.http.routers.trivanohub.entrypoints=websecure
+      - traefik.http.routers.trivanohub.tls=true
+      - traefik.http.routers.trivanohub.tls.certresolver=letsencrypt
+      - traefik.http.services.trivanohub.loadbalancer.server.port=3000
     depends_on:
       migrate:
         condition: service_completed_successfully
 
-  # Backup diário às 03:00 (7 diários, 4 semanais, 6 mensais) na pasta backups do projeto.
   backup:
     image: prodrigestivill/postgres-backup-local:16
     restart: unless-stopped
     environment:
-      <<: *banco
       POSTGRES_HOST: db
+      POSTGRES_USER: trivano
+      POSTGRES_DB: trivano
+      POSTGRES_PASSWORD: SENHA_DO_BANCO
       POSTGRES_EXTRA_OPTS: "--clean --if-exists"
       SCHEDULE: "0 0 3 * * *"
-      BACKUP_KEEP_DAYS: 7
-      BACKUP_KEEP_WEEKS: 4
-      BACKUP_KEEP_MONTHS: 6
+      BACKUP_KEEP_DAYS: "7"
+      BACKUP_KEEP_WEEKS: "4"
+      BACKUP_KEEP_MONTHS: "6"
       TZ: America/Sao_Paulo
     volumes:
       - ./backups:/backups

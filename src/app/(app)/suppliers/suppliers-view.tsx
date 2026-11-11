@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, type ComponentProps } from "react";
 import { Mail, Pencil, Phone, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +8,44 @@ import { Field, Input, Textarea } from "@/components/ui/input";
 import { Badge, Empty } from "@/components/ui/misc";
 import { DeleteButton, FormDialog } from "@/components/app/form-dialog";
 import { api } from "@/lib/client";
+import { normalizeCompanyName, normalizeEmail, normalizePersonName, normalizePhone } from "@/lib/contact-rules";
+
+type Rule = (v: string) => { ok: true; value: string } | { ok: false; error: string };
+
+/** Campo que valida ao sair (e ao enviar) com a mesma regra da API; formata o valor quando válido. */
+function RuledInput({ rule, optional = true, ...props }: ComponentProps<typeof Input> & { rule: Rule; optional?: boolean }) {
+  const [error, setError] = useState("");
+  function check(el: HTMLInputElement, format: boolean) {
+    const v = el.value;
+    if (optional && v.trim() === "") {
+      el.setCustomValidity("");
+      setError("");
+      return;
+    }
+    const r = rule(v);
+    if (r.ok) {
+      if (format) el.value = r.value;
+      el.setCustomValidity("");
+      setError("");
+    } else {
+      el.setCustomValidity(r.error);
+      setError(r.error);
+    }
+  }
+  return (
+    <div className="grid gap-1">
+      <Input
+        {...props}
+        aria-invalid={error ? true : undefined}
+        className={error ? "border-destructive focus-visible:ring-destructive" : undefined}
+        onBlur={(e) => check(e.currentTarget, true)}
+        onChange={(e) => error && check(e.currentTarget, false)}
+        onInvalid={(e) => check(e.currentTarget, false)}
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
 
 type Supplier = {
   id: string;
@@ -34,20 +73,27 @@ function SupplierForm({ s }: { s?: Supplier }) {
   return (
     <>
       <Field label="Nome / razão social">
-        <Input name="name" defaultValue={s?.name} required maxLength={80} autoFocus />
+        <RuledInput name="name" rule={normalizeCompanyName} optional={false} defaultValue={s?.name} required maxLength={80} autoFocus />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Contato">
-          <Input name="contact" defaultValue={s?.contact ?? ""} maxLength={80} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Contato (nome da pessoa)">
+          <RuledInput name="contact" rule={normalizePersonName} defaultValue={s?.contact ?? ""} maxLength={80} autoComplete="off" />
         </Field>
         <Field label="Telefone / WhatsApp">
-          <Input name="phone" defaultValue={s?.phone ?? ""} maxLength={40} />
+          <RuledInput
+            name="phone"
+            rule={normalizePhone}
+            defaultValue={s?.phone ?? ""}
+            maxLength={25}
+            inputMode="tel"
+            placeholder="(11) 98765-4321 ou +86…"
+          />
         </Field>
         <Field label="E-mail">
-          <Input name="email" type="email" defaultValue={s?.email ?? ""} maxLength={120} />
+          <RuledInput name="email" rule={normalizeEmail} type="email" defaultValue={s?.email ?? ""} maxLength={120} placeholder="vendas@fornecedor.com.br" />
         </Field>
         <Field label="Prazo de entrega (dias)">
-          <Input name="leadDays" type="number" min="0" defaultValue={s?.leadDays ?? ""} />
+          <Input name="leadDays" type="number" min="0" max="365" step="1" defaultValue={s?.leadDays ?? ""} />
         </Field>
       </div>
       <Field label="Observações (pedido mínimo, pagamento…)">

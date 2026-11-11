@@ -4,6 +4,12 @@ import { Prisma } from "@prisma/client";
 import { getSession, type Session } from "./auth";
 import { plain } from "./db";
 
+/** Nome legível dos campos nas mensagens de erro. */
+const LABELS: Record<string, string> = {
+  name: "Nome", contact: "Contato", phone: "Telefone", email: "E-mail", leadDays: "Prazo", notes: "Observações",
+  sku: "SKU", cost: "Custo", price: "Preço", qty: "Quantidade", date: "Data", amount: "Valor", password: "Senha",
+};
+
 export class HttpError extends Error {
   constructor(
     public status: number,
@@ -30,7 +36,9 @@ export function route(handler: Handler, opts: { admin?: boolean } = {}) {
     } catch (e) {
       if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status });
       if (e instanceof ZodError) {
-        const msg = e.issues.map((i) => `${i.path.join(".") || "campo"}: ${i.message}`).join("; ");
+        const msg = e.issues
+          .map((i) => (i.code === "custom" ? i.message : `${LABELS[String(i.path[0])] ?? (i.path.join(".") || "campo")}: ${i.message}`))
+          .join("; ");
         return NextResponse.json({ error: msg }, { status: 400 });
       }
       if (e instanceof Prisma.PrismaClientKnownRequestError) {

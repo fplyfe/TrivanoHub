@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeCompanyName, normalizeEmail, normalizePersonName, normalizePhone } from "./contact-rules";
 
 const money = z.coerce.number().positive("Valor deve ser maior que zero").max(999_999_999);
 const money0 = z.coerce.number().min(0, "Valor inválido").max(999_999_999);
@@ -117,13 +118,31 @@ export const entrySchema = z.object({
   repeat: z.coerce.number().int().min(1).max(36).default(1),
 });
 
+/** Campo de texto opcional normalizado por uma regra de contact-rules (vazio = null). */
+const ruled = (fn: (v: string) => { ok: true; value: string } | { ok: false; error: string }, optional = true) =>
+  z.preprocess(
+    (v) => (typeof v === "string" ? v : v == null ? "" : String(v)),
+    z.string().transform((v, ctx) => {
+      if (optional && v.trim() === "") return null;
+      const r = fn(v);
+      if (!r.ok) {
+        ctx.addIssue({ code: "custom", message: r.error });
+        return z.NEVER;
+      }
+      return r.value;
+    }),
+  );
+
 export const supplierSchema = z.object({
-  name: name(),
-  contact: optText,
-  phone: optText,
-  email: optText,
-  leadDays: optInt,
-  notes: optText,
+  name: ruled(normalizeCompanyName, false).pipe(z.string()),
+  contact: ruled(normalizePersonName),
+  phone: ruled(normalizePhone),
+  email: ruled(normalizeEmail),
+  leadDays: z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? null : v),
+    z.coerce.number({ invalid_type_error: "Prazo deve ser um número" }).int("Prazo deve ser em dias inteiros").min(0, "Prazo não pode ser negativo").max(365, "Prazo máximo de 365 dias").nullable(),
+  ),
+  notes: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? null : typeof v === "string" ? v.trim() : v ?? null), z.string().max(500, "Observações: máx. 500 caracteres").nullable()),
   active: z.boolean().default(true),
 });
 

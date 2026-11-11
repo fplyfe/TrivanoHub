@@ -117,6 +117,7 @@ jobs:
           for i in $(seq 1 30); do
             if $C exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
               $C exec -T app node -e "fetch('http://127.0.0.1:3000/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'admin@teste.local',password:'SenhaAdmin123'})}).then(r=>{console.log('login',r.status);process.exit(r.ok?0:1)})"
+              $C exec -T app node --input-type=module - < scripts/ci/smoke.mjs
               echo "Compose da Hostinger OK"; exit 0
             fi
             sleep 4

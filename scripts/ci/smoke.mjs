@@ -12,7 +12,7 @@ const expect = (r, status, label) => { console.log(label, r.status, JSON.stringi
 
 let r = await call("/api/suppliers", "POST", { name: "Fornecedor Teste", contact: "Ana 2", phone: "123", email: "ana@gmail.con", leadDays: "-3" });
 expect(r, 400, "inválido");
-for (const t of ["Contato", "Telefone", "gmail.com", "Prazo"]) if (!String(r.json.error).includes(t)) fail("mensagem sem " + t);
+for (const t of ["contato", "Telefone", "gmail.com", "Prazo"]) if (!String(r.json.error).includes(t)) fail("mensagem sem " + t);
 r = await call("/api/suppliers", "POST", { name: " Fornecedor  Teste ", contact: "Ana Souza", phone: "11987654321", email: "Vendas@Teste.com.br", leadDays: "10", notes: "" });
 expect(r, 200, "válido");
 if (r.json.phone !== "(11) 98765-4321" || r.json.email !== "vendas@teste.com.br" || r.json.name !== "Fornecedor Teste") fail("normalização");

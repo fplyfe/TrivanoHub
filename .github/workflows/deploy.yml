@@ -85,6 +85,16 @@ jobs:
             ghcr.io/fplyfe/trivanohub-migrator:${{ github.sha }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha
+      - name: Imagens públicas? (a VPS baixa sem login)
+        continue-on-error: true
+        run: |
+          docker logout ghcr.io
+          if docker pull -q ghcr.io/fplyfe/trivanohub:latest && docker pull -q ghcr.io/fplyfe/trivanohub-migrator:latest; then
+            echo "Imagens públicas: OK"
+          else
+            echo "::warning::Imagens privadas. Torne públicas em github.com/fplyfe?tab=packages → pacote → Package settings → Change visibility → Public (ou faça docker login ghcr.io na VPS)."
+            exit 1
+          fi
 
   deploy:
     name: Atualizar VPS

@@ -59,11 +59,39 @@ Acesse `https://seu-dominio`, entre como administrador, **troque a senha** em Co
 
 | Tarefa | Comando (na pasta `/opt/trivanohub`) |
 | --- | --- |
-| Atualizar para a versão mais nova do GitHub | `bash scripts/atualizar.sh` |
+| Atualizar para a versão mais nova do GitHub | automático com GitHub Actions (abaixo) ou `bash scripts/atualizar.sh` |
 | Backup imediato | `bash scripts/backup-agora.sh` |
 | Restaurar o backup mais recente | `bash scripts/restaurar.sh` |
 | Ver se está tudo rodando | `docker compose -f docker-compose.yml -f docker-compose.vps.yml ps` |
 | Ver erros do app | `docker compose -f docker-compose.yml -f docker-compose.vps.yml logs -f app` |
+
+## Deploy automático (GitHub Actions)
+
+Depois que a VPS estiver instalada (passos acima), cada push na `main` atualiza o site sozinho: o GitHub confere o código (tipos, testes e build) e, se tudo passar, entra na VPS e roda `scripts/atualizar.sh`. Se algo quebrar, o deploy não acontece e o site continua na versão anterior. O andamento aparece na aba **Actions** do repositório.
+
+Configuração (uma vez só):
+
+1. No PC, crie uma chave só para o deploy (sem senha, aperte Enter quando perguntar):
+   ```powershell
+   ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\trivano_deploy -C "github-actions"
+   ```
+2. Autorize essa chave na VPS:
+   ```powershell
+   type $env:USERPROFILE\.ssh\trivano_deploy.pub | ssh root@IP_DA_VPS "cat >> ~/.ssh/authorized_keys"
+   ```
+3. No GitHub, abra o repositório → **Settings → Secrets and variables → Actions → New repository secret** e crie:
+
+   | Nome | Valor |
+   | --- | --- |
+   | `VPS_HOST` | IP da VPS |
+   | `VPS_USER` | `root` (ou o usuário que você usa) |
+   | `VPS_SSH_KEY` | conteúdo inteiro de `trivano_deploy` (a chave **sem** `.pub`) |
+   | `VPS_PORT` | opcional, só se o SSH não for na porta 22 |
+   | `VPS_APP_DIR` | opcional, só se o projeto não estiver em `/opt/trivanohub` |
+
+4. Teste: aba **Actions → Deploy → Run workflow**. Ao final aparece "site no ar".
+
+Enquanto `VPS_HOST` não existir, a Action só verifica o código e pula o deploy, sem dar erro.
 
 ## Backup fora do servidor
 

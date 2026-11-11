@@ -1,0 +1,69 @@
+# Verifica o código e, se estiver tudo certo, atualiza o site na VPS.
+# Roda a cada push na main ou manualmente (aba Actions → Deploy → Run workflow).
+# Secrets necessários (Settings → Secrets and variables → Actions):
+#   VPS_HOST     IP ou domínio da VPS
+#   VPS_USER     usuário SSH (ex.: root)
+#   VPS_SSH_KEY  chave SSH privada que entra nesse usuário
+#   VPS_PORT     (opcional) porta SSH, padrão 22
+#   VPS_APP_DIR  (opcional) pasta do projeto na VPS, padrão /opt/trivanohub
+# Sem VPS_HOST cadastrado, o deploy é pulado e só a verificação roda.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    name: Verificar código
+    runs-on: ubuntu-latest
+    outputs:
+      tem_vps: ${{ steps.vps.outputs.tem_vps }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Tipos (TypeScript)
+        run: npm run typecheck
+      - name: Testes (cálculos de preço e plano)
+        run: npm test
+      - name: Build
+        run: npx next build
+        env:
+          AUTH_SECRET: build-only-secret-not-used-in-production-000000
+          DATABASE_URL: postgresql://x:x@localhost:5432/x
+      - id: vps
+        name: VPS configurada?
+        run: echo "tem_vps=${{ secrets.VPS_HOST != '' }}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Atualizar VPS
+    needs: verificar
+    if: needs.verificar.outputs.tem_vps == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 30m
+          script: |
+            set -e
+            cd "${{ secrets.VPS_APP_DIR || '/opt/trivanohub' }}"
+            bash scripts/atualizar.sh
+            for i in $(seq 1 20); do
+              if curl -fsS http://127.0.0.1:3090/api/health; then echo " — site no ar"; exit 0; fi
+              sleep 6
+            done
+            echo "O site não respondeu em 2 minutos. Veja: docker compose logs app --tail 100"
+            exit 1

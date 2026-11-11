@@ -1,4 +1,6 @@
-# Verifica o código e, se estiver tudo certo, atualiza o site na VPS.
+# Verifica o código, publica as imagens Docker no GitHub (ghcr.io) e atualiza o site na VPS.
+# Imagens: ghcr.io/fplyfe/trivanohub:latest (app) e ghcr.io/fplyfe/trivanohub-migrator:latest (banco),
+# usadas pelo docker-compose.hostinger.yml (Docker Manager da Hostinger).
 # Roda a cada push na main ou manualmente (aba Actions → Deploy → Run workflow).
 # Secrets necessários (Settings → Secrets and variables → Actions):
 #   VPS_HOST     IP ou domínio da VPS
@@ -6,6 +8,7 @@
 #   VPS_SSH_KEY  chave SSH privada que entra nesse usuário
 #   VPS_PORT     (opcional) porta SSH, padrão 22
 #   VPS_APP_DIR  (opcional) pasta do projeto na VPS, padrão /opt/trivanohub
+#                (projeto criado pelo painel da Hostinger: a pasta onde está o docker-compose.yml dele)
 # Sem VPS_HOST cadastrado, o deploy é pulado e só a verificação roda.
 name: Deploy
 
@@ -44,9 +47,48 @@ jobs:
         name: VPS configurada?
         run: echo "tem_vps=${{ secrets.VPS_HOST != '' }}" >> "$GITHUB_OUTPUT"
 
+  imagens:
+    name: Publicar imagens
+    needs: verificar
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: App
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runner
+          push: true
+          tags: |
+            ghcr.io/fplyfe/trivanohub:latest
+            ghcr.io/fplyfe/trivanohub:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Migrador do banco
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrator
+          push: true
+          tags: |
+            ghcr.io/fplyfe/trivanohub-migrator:latest
+            ghcr.io/fplyfe/trivanohub-migrator:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+
   deploy:
     name: Atualizar VPS
-    needs: verificar
+    needs: [verificar, imagens]
     if: needs.verificar.outputs.tem_vps == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -60,7 +102,13 @@ jobs:
           script: |
             set -e
             cd "${{ secrets.VPS_APP_DIR || '/opt/trivanohub' }}"
-            bash scripts/atualizar.sh
+            if [ -f scripts/atualizar.sh ]; then
+              bash scripts/atualizar.sh            # instalação pelo terminal (compila na VPS)
+            else
+              docker compose pull                  # projeto do painel da Hostinger (imagens prontas)
+              docker compose up -d
+              docker image prune -f >/dev/null
+            fi
             for i in $(seq 1 20); do
               if curl -fsS http://127.0.0.1:3090/api/health; then echo " — site no ar"; exit 0; fi
               sleep 6

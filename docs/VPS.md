@@ -55,6 +55,18 @@ O script instala Docker, firewall (só portas 22, 80 e 443), atualizações auto
 
 Acesse `https://seu-dominio`, entre como administrador, **troque a senha** em Configurações e crie os outros usuários em **Usuários**. Depois apague o arquivo de logins: `rm /opt/trivanohub/LOGINS.txt`.
 
+## VPS que já tem Traefik
+
+Se a VPS já roda o Traefik (ocupando as portas 80 e 443), o instalador detecta e pergunta se deve usá-lo. Respondendo sim, ele não sobe o Caddy nem mexe no firewall: liga o app à rede do Traefik com as labels de `docker-compose.traefik.yml` (`Host(\`DOMAIN\`)`, entrypoint HTTPS, certresolver e porta 3000). As sugestões vêm da configuração do próprio Traefik; confira antes de aceitar:
+
+| Pergunta | Como descobrir |
+| --- | --- |
+| Rede Docker do Traefik | `docker network ls` e `docker inspect <traefik> -f '{{json .NetworkSettings.Networks}}'` |
+| Entrypoint HTTPS | o nome ligado à porta 443 no `traefik.yml` ou nos argumentos (`--entrypoints.NOME.address=:443`) |
+| Certresolver | o nome em `certificatesResolvers` (`--certificatesresolvers.NOME.acme...`) |
+
+Tudo fica no `.env` (`COMPOSE_FILE`, `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT`, `TRAEFIK_CERTRESOLVER`), e os scripts e o deploy automático passam a usar esse modo sozinhos. Para mudar depois, edite essas linhas e rode `bash scripts/atualizar.sh`.
+
 ## Dia a dia
 
 | Tarefa | Comando (na pasta `/opt/trivanohub`) |
@@ -62,7 +74,7 @@ Acesse `https://seu-dominio`, entre como administrador, **troque a senha** em Co
 | Atualizar para a versão mais nova do GitHub | automático com GitHub Actions (abaixo) ou `bash scripts/atualizar.sh` |
 | Backup imediato | `bash scripts/backup-agora.sh` |
 | Restaurar o backup mais recente | `bash scripts/restaurar.sh` |
-| Ver se está tudo rodando | `docker compose -f docker-compose.yml -f docker-compose.vps.yml ps` |
+| Ver se está tudo rodando | `docker compose -f docker-compose.yml -f docker-compose.vps.yml ps` (modo Traefik: só `docker compose ps`) |
 | Ver erros do app | `docker compose -f docker-compose.yml -f docker-compose.vps.yml logs -f app` |
 
 ## Deploy automático (GitHub Actions)

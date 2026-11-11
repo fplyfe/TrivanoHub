@@ -1,0 +1,31 @@
+# Complemento para VPS que JÁ TEM Traefik rodando (no lugar do docker-compose.vps.yml / Caddy).
+# O Traefik recebe o tráfego em https://$DOMAIN e repassa para o app na porta 3000.
+# Variáveis no .env (o instalador preenche):
+#   DOMAIN                 domínio do app (ex.: hub.trivano.com.br)
+#   TRAEFIK_NETWORK        rede Docker em que o Traefik está      (padrão: traefik)
+#   TRAEFIK_ENTRYPOINT     entrypoint HTTPS do Traefik            (padrão: websecure)
+#   TRAEFIK_CERTRESOLVER   certresolver do Let's Encrypt          (padrão: letsencrypt)
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml   (faz os scripts usarem este arquivo)
+services:
+  app:
+    environment:
+      COOKIE_SECURE: "true"
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.trivanohub.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.trivanohub.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.trivanohub.tls=true"
+      - "traefik.http.routers.trivanohub.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.trivanohub.middlewares=trivanohub-headers"
+      - "traefik.http.middlewares.trivanohub-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.trivanohub-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.services.trivanohub.loadbalancer.server.port=3000"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

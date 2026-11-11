@@ -3,7 +3,8 @@
 # Uso: bash scripts/atualizar.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
+. scripts/_compose.sh
 git pull --ff-only
-docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --build
+$DC up -d --build
 docker image prune -f >/dev/null
-docker compose -f docker-compose.yml -f docker-compose.vps.yml ps
+$DC ps

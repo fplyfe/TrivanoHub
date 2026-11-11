@@ -96,6 +96,33 @@ jobs:
             exit 1
           fi
 
+  testar-hostinger:
+    name: Testar compose da Hostinger
+    needs: imagens
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Subir com as imagens publicadas
+        run: |
+          cat > .env.teste <<'ENV'
+          TRAEFIK_HOST=teste.local
+          POSTGRES_PASSWORD=SenhaTeste123456789012345678901234
+          AUTH_SECRET=ChaveTesteComMaisDeTrintaEDoisCaracteres1234
+          ADMIN_NOME=Admin Teste
+          ADMIN_EMAIL=admin@teste.local
+          ADMIN_SENHA=SenhaAdmin123
+          ENV
+          C="docker compose -p teste --env-file .env.teste -f docker-compose.hostinger.yml"
+          $C up -d
+          for i in $(seq 1 30); do
+            if $C exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+              $C exec -T app node -e "fetch('http://127.0.0.1:3000/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'admin@teste.local',password:'SenhaAdmin123'})}).then(r=>{console.log('login',r.status);process.exit(r.ok?0:1)})"
+              echo "Compose da Hostinger OK"; exit 0
+            fi
+            sleep 4
+          done
+          $C ps -a; $C logs --tail 80; exit 1
+
   deploy:
     name: Atualizar VPS
     needs: [verificar, imagens]

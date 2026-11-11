@@ -1,16 +1,30 @@
-# TrivanoHub para o Docker Manager da Hostinger: apague tudo no Editor YAML e cole este arquivo.
-# Usa as imagens prontas do ghcr.io (publicadas pelo GitHub Actions) e o Traefik da Hostinger.
-# Troque: SENHA_DO_BANCO (4 lugares, só letras e números), CHAVE_SECRETA_32_OU_MAIS,
-# nome/e-mail/SENHA_INICIAL_ADMIN do administrador e o domínio em Host(`...`).
-# Deixe a aba "Ambiente" vazia: tudo está aqui.
+# TrivanoHub no Docker Manager da Hostinger (Compose manualmente), atrás do Traefik da Hostinger.
+# Editor YAML: apague tudo e cole este arquivo. Ambiente: preencha as variáveis abaixo.
+#   TRAEFIK_HOST       domínio do app (ex.: trivano.seudominio.com)
+#   POSTGRES_PASSWORD  senha do banco (só letras e números, 32+)
+#   AUTH_SECRET        chave secreta do login (32+ caracteres)
+#   ADMIN_NOME, ADMIN_EMAIL, ADMIN_SENHA   administrador criado na primeira vez
+# Opcionais: TRAEFIK_ENTRYPOINT (websecure), TRAEFIK_CERTRESOLVER (letsencrypt)
+
+x-base: &base
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
 services:
   db:
+    <<: *base
     image: postgres:16-alpine
-    restart: unless-stopped
     environment:
       POSTGRES_USER: trivano
       POSTGRES_DB: trivano
-      POSTGRES_PASSWORD: SENHA_DO_BANCO
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no ambiente}
       TZ: America/Sao_Paulo
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -20,54 +34,70 @@ services:
       timeout: 5s
       retries: 10
 
+  # Cria/atualiza as tabelas e o cadastro inicial, depois encerra.
   migrate:
+    <<: *base
     image: ghcr.io/fplyfe/trivanohub-migrator:latest
     pull_policy: always
     restart: "no"
+    cap_drop:
+      - ALL
     environment:
-      DATABASE_URL: postgresql://trivano:SENHA_DO_BANCO@db:5432/trivano?schema=public
-      USER1_NAME: Nome do Administrador
-      USER1_EMAIL: admin@seudominio.com.br
-      USER1_PASSWORD: SENHA_INICIAL_ADMIN
+      DATABASE_URL: postgresql://trivano:${POSTGRES_PASSWORD}@db:5432/trivano?schema=public
+      USER1_NAME: ${ADMIN_NOME:?Defina ADMIN_NOME no ambiente}
+      USER1_EMAIL: ${ADMIN_EMAIL:?Defina ADMIN_EMAIL no ambiente}
+      USER1_PASSWORD: ${ADMIN_SENHA:?Defina ADMIN_SENHA no ambiente}
     depends_on:
       db:
         condition: service_healthy
 
   app:
+    <<: *base
     image: ghcr.io/fplyfe/trivanohub:latest
     pull_policy: always
-    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    pids_limit: 200
     environment:
-      DATABASE_URL: postgresql://trivano:SENHA_DO_BANCO@db:5432/trivano?schema=public
-      AUTH_SECRET: CHAVE_SECRETA_32_OU_MAIS
+      NODE_ENV: production
+      DATABASE_URL: postgresql://trivano:${POSTGRES_PASSWORD}@db:5432/trivano?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?Defina AUTH_SECRET no ambiente}
       COOKIE_SECURE: "true"
       APP_TZ: America/Sao_Paulo
       TZ: America/Sao_Paulo
-    ports:
-      - "127.0.0.1:3090:3000"
-    networks:
-      - default
-      - traefik-proxy
+    expose:
+      - "3000"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /app/.next/cache:rw,noexec,nosuid,size=128m,mode=1777
     labels:
       - traefik.enable=true
-      - traefik.docker.network=traefik-proxy
-      - traefik.http.routers.trivanohub.rule=Host(`hub.seudominio.com.br`)
-      - traefik.http.routers.trivanohub.entrypoints=websecure
+      - traefik.http.routers.trivanohub.rule=Host(`${TRAEFIK_HOST:?Defina TRAEFIK_HOST no ambiente}`)
+      - traefik.http.routers.trivanohub.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
       - traefik.http.routers.trivanohub.tls=true
-      - traefik.http.routers.trivanohub.tls.certresolver=letsencrypt
+      - traefik.http.routers.trivanohub.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.routers.trivanohub.middlewares=trivanohub-seguranca@docker,trivanohub-compressao@docker
       - traefik.http.services.trivanohub.loadbalancer.server.port=3000
+      - traefik.http.middlewares.trivanohub-compressao.compress=true
+      - traefik.http.middlewares.trivanohub-seguranca.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.trivanohub-seguranca.headers.frameDeny=true
+      - traefik.http.middlewares.trivanohub-seguranca.headers.referrerPolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.trivanohub-seguranca.headers.stsSeconds=31536000
+      - traefik.http.middlewares.trivanohub-seguranca.headers.stsIncludeSubdomains=true
     depends_on:
       migrate:
         condition: service_completed_successfully
 
+  # Backup diário às 03:00 (7 diários, 4 semanais, 6 mensais) na pasta backups do projeto.
   backup:
+    <<: *base
     image: prodrigestivill/postgres-backup-local:16
-    restart: unless-stopped
     environment:
       POSTGRES_HOST: db
       POSTGRES_USER: trivano
       POSTGRES_DB: trivano
-      POSTGRES_PASSWORD: SENHA_DO_BANCO
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_EXTRA_OPTS: "--clean --if-exists"
       SCHEDULE: "0 0 3 * * *"
       BACKUP_KEEP_DAYS: "7"
@@ -82,7 +112,3 @@ services:
 
 volumes:
   pgdata:
-
-networks:
-  traefik-proxy:
-    external: true

@@ -55,6 +55,10 @@ O script instala Docker, firewall (só portas 22, 80 e 443), atualizações auto
 
 Acesse `https://seu-dominio`, entre como administrador, **troque a senha** em Configurações e crie os outros usuários em **Usuários**. Depois apague o arquivo de logins: `rm /opt/trivanohub/LOGINS.txt`.
 
+## Pelo painel da Hostinger (Docker Manager)
+
+Sem terminal: a cada push na `main`, o GitHub Actions publica as imagens prontas (`ghcr.io/fplyfe/trivanohub` e `trivanohub-migrator`). No painel, **Docker Manager → Compose → Compose manualmente**, cole o conteúdo de `docker-compose.hostinger.yml`, troque os valores marcados com `TROQUE` (senha do banco, chave secreta, domínio, administrador) e clique em **Deploy**. Ele já usa o Traefik da Hostinger (`traefik-proxy`, `websecure`, `letsencrypt`). Para atualizar, use a opção de atualizar/redeploy do projeto no painel, que baixa a imagem nova.
+
 ## VPS que já tem Traefik
 
 Se a VPS já roda o Traefik (ocupando as portas 80 e 443), o instalador detecta e pergunta se deve usá-lo. Respondendo sim, ele não sobe o Caddy nem mexe no firewall: liga o app à rede do Traefik com as labels de `docker-compose.traefik.yml` (`Host(\`DOMAIN\`)`, entrypoint HTTPS, certresolver e porta 3000). As sugestões vêm da configuração do próprio Traefik; confira antes de aceitar:

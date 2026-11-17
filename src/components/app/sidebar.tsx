@@ -38,7 +38,11 @@ type Group = { id: string; label: string; items: Item[] };
 
 /** Menu agrupado por área. Cada grupo abre e fecha; o grupo da página atual abre sozinho. */
 const GROUPS: Group[] = [
-  { id: "inicio", label: "Início", items: [{ href: "/dashboard", label: "Painel", icon: LayoutDashboard }] },
+  {
+    id: "inicio",
+    label: "Início",
+    items: [{ href: "/dashboard", label: "Painel", icon: LayoutDashboard }],
+  },
   {
     id: "vendas",
     label: "Vendas",
@@ -62,7 +66,11 @@ const GROUPS: Group[] = [
     items: [
       { href: "/funnel", label: "Funil de produtos", icon: Filter },
       { href: "/products", label: "Produtos e estoque", icon: Package },
-      { href: "/supplier-funnel", label: "Funil de fornecedores", icon: SquareKanban },
+      {
+        href: "/supplier-funnel",
+        label: "Funil de fornecedores",
+        icon: SquareKanban,
+      },
       { href: "/suppliers", label: "Fornecedores", icon: Truck },
       { href: "/quotes", label: "Cotações", icon: ClipboardList },
     ],
@@ -94,11 +102,15 @@ const GROUPS: Group[] = [
   },
 ];
 
-const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
+const isActive = (pathname: string, href: string) =>
+  pathname === href || pathname.startsWith(href + "/");
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
-  useEffect(() => setDark(document.documentElement.classList.contains("dark")), []);
+  useEffect(
+    () => setDark(document.documentElement.classList.contains("dark")),
+    [],
+  );
   return (
     <Button
       variant="ghost"
@@ -131,7 +143,9 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
     } catch {}
   }, []);
   const toggle = (id: string) => {
-    const next = collapsed.includes(id) ? collapsed.filter((x) => x !== id) : [...collapsed, id];
+    const next = collapsed.includes(id)
+      ? collapsed.filter((x) => x !== id)
+      : [...collapsed, id];
     setCollapsed(next);
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(next));
@@ -139,7 +153,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   };
 
   return (
-    <nav className="grid gap-3">
+    <nav className="grid gap-2">
       {GROUPS.map((g) => {
         const hasActive = g.items.some((i) => isActive(pathname, i.href));
         const open = hasActive || !collapsed.includes(g.id);
@@ -154,7 +168,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                 className="flex items-center justify-between rounded-md px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
               >
                 {g.label}
-                <ChevronDown className={cn("size-3.5 transition-transform", !open && "-rotate-90")} />
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 transition-transform",
+                    !open && "-rotate-90",
+                  )}
+                />
               </button>
             )}
             {open &&
@@ -167,9 +186,11 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                      "flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
                       !single && "ml-1",
-                      active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      active
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
                     )}
                   >
                     <Icon className="size-4" />
@@ -186,13 +207,23 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand() {
   return (
-    <Link href="/dashboard" className="flex items-center px-3" aria-label="TrivanoHub">
+    <Link
+      href="/dashboard"
+      className="flex items-center px-3"
+      aria-label="TrivanoHub"
+    >
       <TrivanoLogo />
     </Link>
   );
 }
 
-export function Sidebar({ userName, role }: { userName: string; role: "ADMIN" | "MEMBER" }) {
+export function Sidebar({
+  userName,
+  role,
+}: {
+  userName: string;
+  role: "ADMIN" | "MEMBER";
+}) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -206,8 +237,13 @@ export function Sidebar({ userName, role }: { userName: string; role: "ADMIN" | 
     <div className="flex items-center justify-between gap-2 border-t pt-3">
       <div className="min-w-0 px-3">
         <p className="truncate text-sm font-medium">{userName}</p>
-        <p className="text-[11px] text-muted-foreground">{role === "ADMIN" ? "Administrador" : "Membro"}</p>
-        <button onClick={logout} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <p className="text-[11px] text-muted-foreground">
+          {role === "ADMIN" ? "Administrador" : "Membro"}
+        </p>
+        <button
+          onClick={logout}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
           <LogOut className="size-3" /> Sair
         </button>
       </div>
@@ -218,9 +254,9 @@ export function Sidebar({ userName, role }: { userName: string; role: "ADMIN" | 
   return (
     <>
       {/* Desktop */}
-      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col gap-6 border-r bg-card p-4 lg:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col gap-4 border-r bg-card p-4 lg:flex">
         <Brand />
-        <div className="flex-1 overflow-y-auto">
+        <div className="scroll-hover -mr-2 min-h-0 flex-1 overflow-y-auto pr-2">
           <NavLinks />
         </div>
         {footer}
@@ -229,21 +265,34 @@ export function Sidebar({ userName, role }: { userName: string; role: "ADMIN" | 
       {/* Mobile */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b bg-card/90 px-4 py-2 backdrop-blur lg:hidden">
         <Brand />
-        <Button variant="ghost" size="icon" onClick={() => setOpen(true)} aria-label="Menu">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setOpen(true)}
+          aria-label="Menu"
+        >
           <Menu />
         </Button>
       </header>
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setOpen(false)}
+          />
           <aside className="absolute inset-y-0 left-0 flex w-64 flex-col gap-6 bg-card p-4 shadow-xl">
             <div className="flex items-center justify-between">
               <Brand />
-              <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Fechar">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setOpen(false)}
+                aria-label="Fechar"
+              >
                 <X />
               </Button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="scroll-hover -mr-2 min-h-0 flex-1 overflow-y-auto pr-2">
               <NavLinks onNavigate={() => setOpen(false)} />
             </div>
             {footer}

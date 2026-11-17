@@ -15,6 +15,8 @@ const demo = [
 for (const [name, phone, stage, nextStep, followUpAt] of demo)
   await call("/api/suppliers", "POST", { name, phone, stage, nextStep, followUpAt, email: "", link: name.includes("Co.") ? "1688.com/loja" : "", notes: "Pedido mínimo 50 un., pagamento 30 dias." });
 
+for (let i = 1; i <= 9; i++) await call("/api/suppliers", "POST", { name: `Fornecedor Aprovado ${i}`, phone: `(11) 9${String(8000 + i)}-${String(1000 + i)}`, email: "", link: i % 2 ? "loja.exemplo.com.br" : "", notes: "" });
+
 const browser = await puppeteer.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
 const page = await browser.newPage();
 await page.setCookie({ name: "gs_session", value: token, url: B });
@@ -24,6 +26,13 @@ const shot = async (path, file, w, h) => {
   await page.screenshot({ path: `${out}/${file}`, fullPage: true });
 };
 await shot("/supplier-funnel", "funil-fornecedores-pc.png", 1440, 900);
+await shot("/supplier-funnel", "funil-fornecedores-notebook.png", 1280, 720);
+await page.evaluate(() => { localStorage.setItem("theme", "dark"); document.documentElement.classList.add("dark"); });
+await page.setViewport({ width: 2560, height: 1080 });
+await page.goto(B + "/supplier-funnel", { waitUntil: "networkidle0" });
+await page.evaluate(() => document.documentElement.classList.add("dark"));
+await page.screenshot({ path: `${out}/funil-fornecedores-2560-escuro.png` });
+await page.evaluate(() => { localStorage.setItem("theme", "light"); document.documentElement.classList.remove("dark"); });
 await shot("/supplier-funnel", "funil-fornecedores-celular.png", 390, 844);
 await shot("/calculator", "calculadora-pc.png", 1440, 900);
 await shot("/suppliers", "fornecedores-pc.png", 1440, 900);

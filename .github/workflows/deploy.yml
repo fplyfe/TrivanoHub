@@ -100,6 +100,8 @@ jobs:
     name: Testar compose da Hostinger
     needs: imagens
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Subir com as imagens publicadas
@@ -139,6 +141,12 @@ jobs:
           name: prints
           path: /tmp/prints
           retention-days: 7
+      - name: Prints no branch ci-prints (para conferência)
+        run: |
+          cd /tmp/prints
+          git init -q -b ci-prints && git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Prints de ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-prints
 
   deploy:
     name: Atualizar VPS

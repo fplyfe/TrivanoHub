@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { db, n } from "./db";
 import { HttpError } from "./api";
 import { addDays, monthRange, shiftMonth, toDate, toStr } from "./dates";
-import { commissionFor, computeProfit, fixedFeeFor, round2, simplesEffectiveRate, type ChannelRates } from "./pricing";
+import { computeProfit, round2, simplesEffectiveRate, unitCharges, type ChannelRates, type FeeTier, type ProductRates, type ShipMode } from "./pricing";
 
 type Tx = Prisma.TransactionClient | typeof db;
 
@@ -16,6 +16,8 @@ export function channelRates(c: {
   fixedFee: Prisma.Decimal;
   fixedFeeThreshold: Prisma.Decimal;
   adsRate: Prisma.Decimal;
+  feeTiers: Prisma.JsonValue | null;
+  feeOwnShippingOnly: boolean;
 }): ChannelRates {
   return {
     commissionClassic: n(c.commissionClassic),
@@ -23,6 +25,41 @@ export function channelRates(c: {
     fixedFee: n(c.fixedFee),
     fixedFeeThreshold: n(c.fixedFeeThreshold),
     adsRate: n(c.adsRate),
+    feeTiers: parseFeeTiers(c.feeTiers),
+    feeOwnShippingOnly: c.feeOwnShippingOnly,
+  };
+}
+
+/** Lê as faixas salvas no canal (JSON), ignorando linhas inválidas. */
+export function parseFeeTiers(v: Prisma.JsonValue | null): FeeTier[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: FeeTier[] = [];
+  for (const t of v) {
+    if (!t || typeof t !== "object" || Array.isArray(t)) continue;
+    const below = Number((t as Record<string, unknown>).below);
+    const fee = Number((t as Record<string, unknown>).fee ?? 0);
+    const half = (t as Record<string, unknown>).half === true;
+    if (Number.isFinite(below) && below > 0 && Number.isFinite(fee) && fee >= 0) out.push(half ? { below, fee: 0, half } : { below, fee });
+  }
+  return out.sort((x, y) => x.below - y.below);
+}
+
+/** Campos do produto usados nas tarifas (para selects do Prisma). */
+export const PRODUCT_RATES_SELECT = { shipping: true, shippingOwn: true, shipMode: true, commissionClassic: true, commissionPremium: true } as const;
+
+export function productRates(p: {
+  shipping: Prisma.Decimal | number;
+  shippingOwn: Prisma.Decimal | number;
+  shipMode: ShipMode;
+  commissionClassic: Prisma.Decimal | number | null;
+  commissionPremium: Prisma.Decimal | number | null;
+}): ProductRates {
+  return {
+    shipping: n(p.shipping),
+    shippingOwn: n(p.shippingOwn),
+    shipMode: p.shipMode,
+    commissionClassic: p.commissionClassic == null ? null : n(p.commissionClassic),
+    commissionPremium: p.commissionPremium == null ? null : n(p.commissionPremium),
   };
 }
 
@@ -54,9 +91,10 @@ export type SaleInput = {
   channelId: string;
   productId: string;
   listingType: "CLASSICO" | "PREMIUM";
+  shipMode?: ShipMode | null; // se vazio usa o padrão do produto
   qty: number;
   price: number;
-  shipping?: number | null; // por unidade; se vazio usa o do produto
+  shipping?: number | null; // por unidade; se vazio usa o do produto na forma de envio
   externalId?: string | null;
   note?: string | null;
 };
@@ -69,15 +107,18 @@ export async function createSale(v: SaleInput) {
       tx.channel.findUniqueOrThrow({ where: { id: v.channelId } }),
     ]);
     const ch = channelRates(channel);
+    const prod = productRates(product);
+    const shipMode = v.shipMode ?? prod.shipMode;
+    const u = unitCharges(ch, prod, v.price, v.listingType, shipMode);
     const { rate: taxRate } = await taxRateFor(v.date.slice(0, 7), tx);
     const r = computeProfit({
       price: v.price,
       qty: v.qty,
       cost: n(product.cost),
       packaging: n(product.packaging),
-      shipping: v.shipping ?? n(product.shipping),
-      commissionRate: commissionFor(ch, v.listingType),
-      fixedFee: fixedFeeFor(ch, v.price),
+      shipping: v.shipping ?? u.shipping,
+      commissionRate: u.commissionRate,
+      fixedFee: u.fixedFee,
       adsRate: ch.adsRate,
       taxRate,
     });
@@ -87,6 +128,7 @@ export async function createSale(v: SaleInput) {
         channelId: v.channelId,
         productId: v.productId,
         listingType: v.listingType,
+        shipMode,
         qty: v.qty,
         price: v.price,
         gross: r.gross,
@@ -219,18 +261,23 @@ export async function monthSummary(ym: string) {
   };
 }
 
-/** Margem (%) antes do Ads de um produto no preço atual = ACOS de empate. */
-export function marginBeforeAds(p: { price: Prisma.Decimal | number; cost: Prisma.Decimal | number; packaging: Prisma.Decimal | number; shipping: Prisma.Decimal | number }, ch: ChannelRates | null, taxRate: number): number | null {
+/** Margem (%) antes do Ads de um produto no preço atual (Clássico, envio padrão) = ACOS de empate. */
+export function marginBeforeAds(
+  p: Parameters<typeof productRates>[0] & { price: Prisma.Decimal | number; cost: Prisma.Decimal | number; packaging: Prisma.Decimal | number },
+  ch: ChannelRates | null,
+  taxRate: number,
+): number | null {
   const price = n(p.price);
   if (!ch || price <= 0) return null;
+  const u = unitCharges(ch, productRates(p), price, "CLASSICO");
   const r = computeProfit({
     price,
     qty: 1,
     cost: n(p.cost),
     packaging: n(p.packaging),
-    shipping: n(p.shipping),
-    commissionRate: ch.commissionClassic,
-    fixedFee: fixedFeeFor(ch, price),
+    shipping: u.shipping,
+    commissionRate: u.commissionRate,
+    fixedFee: u.fixedFee,
     adsRate: 0,
     taxRate,
   });

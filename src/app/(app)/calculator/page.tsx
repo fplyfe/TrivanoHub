@@ -1,5 +1,5 @@
 import { db, plain } from "@/lib/db";
-import { channelRates, getSettings, taxRateFor } from "@/lib/biz";
+import { channelRates, getSettings, PRODUCT_RATES_SELECT, taxRateFor } from "@/lib/biz";
 import { currentMonth } from "@/lib/dates";
 import { n } from "@/lib/db";
 import { PageHeader } from "@/components/ui/misc";
@@ -12,7 +12,7 @@ export default async function CalculatorPage() {
     db.channel.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     db.product.findMany({
       where: { active: true },
-      select: { id: true, name: true, sku: true, cost: true, packaging: true, shipping: true, price: true },
+      select: { id: true, name: true, sku: true, cost: true, packaging: true, price: true, ...PRODUCT_RATES_SELECT },
       orderBy: { name: "asc" },
     }),
     taxRateFor(currentMonth()),

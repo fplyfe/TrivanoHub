@@ -10,6 +10,7 @@ import { Field, Input, Select } from "@/components/ui/input";
 import { Badge, PageHeader } from "@/components/ui/misc";
 import { DeleteButton, FormDialog } from "@/components/app/form-dialog";
 import { api } from "@/lib/client";
+import { ML_FEE_TIERS, type FeeTier } from "@/lib/pricing";
 import { ACCOUNT_TYPE_LABEL, brl, fmtPct, GROUP_LABEL, REGIME_LABEL } from "@/lib/utils";
 
 type Settings = { companyName: string; regime: keyof typeof REGIME_LABEL; manualTaxRate: number; rbt12Override: number | null; minMargin: number; planTarget: number; planStart: string; planEnd: string };
@@ -20,6 +21,8 @@ type Channel = {
   commissionPremium: number;
   fixedFee: number;
   fixedFeeThreshold: number;
+  feeTiers: FeeTier[] | null;
+  feeOwnShippingOnly: boolean;
   adsRate: number;
   releaseDays: number;
   accountId: string | null;
@@ -120,6 +123,70 @@ function CompanyCard({ s, isAdmin }: { s: Settings; isAdmin: boolean }) {
   );
 }
 
+const TIER_ROWS = 5;
+type TierRow = { below: string; fee: string; half: boolean };
+const toRows = (t: FeeTier[] | null | undefined): TierRow[] => {
+  const rows = (t ?? []).map((x) => ({ below: String(x.below), fee: x.half ? "" : String(x.fee), half: !!x.half }));
+  while (rows.length < TIER_ROWS) rows.push({ below: "", fee: "", half: false });
+  return rows.slice(0, TIER_ROWS);
+};
+
+/** Faixas de tarifa por unidade: "abaixo de R$ X paga R$ Y" (ou metade do preço). */
+function FeeTiersEditor({ c }: { c?: Channel }) {
+  const [rows, setRows] = useState<TierRow[]>(toRows(c?.feeTiers));
+  const [ownOnly, setOwnOnly] = useState(c?.feeOwnShippingOnly ?? false);
+  const upd = (i: number, patch: Partial<TierRow>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  return (
+    <fieldset className="grid gap-2 rounded-lg border p-3">
+      <legend className="px-1 text-xs font-medium text-muted-foreground">Tarifa por unidade por faixa de preço</legend>
+      <div className="grid grid-cols-[1fr_1fr_auto] items-center gap-2 text-xs text-muted-foreground">
+        <span>Preço abaixo de (R$)</span>
+        <span>Tarifa (R$/un.)</span>
+        <span>½ preço</span>
+      </div>
+      {rows.map((r, i) => (
+        <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
+          <Input name={`tierBelow_${i}`} type="number" step="0.01" min="0" value={r.below} onChange={(e) => upd(i, { below: e.target.value })} aria-label={`Faixa ${i + 1}: preço abaixo de`} />
+          <Input
+            name={`tierFee_${i}`}
+            type="number"
+            step="0.01"
+            min="0"
+            value={r.fee}
+            disabled={r.half}
+            onChange={(e) => upd(i, { fee: e.target.value })}
+            aria-label={`Faixa ${i + 1}: tarifa`}
+          />
+          <input type="checkbox" name={`tierHalf_${i}`} checked={r.half} onChange={(e) => upd(i, { half: e.target.checked })} className="justify-self-center" aria-label={`Faixa ${i + 1}: metade do preço`} />
+        </div>
+      ))}
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="feeOwnShippingOnly" checked={ownOnly} onChange={(e) => setOwnOnly(e.target.checked)} />
+        Cobrar só no Flex/envio próprio (Full, Coleta e Agência não pagam)
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setRows(toRows(ML_FEE_TIERS));
+            setOwnOnly(true);
+          }}
+        >
+          Usar tabela do Mercado Livre
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setRows(toRows([]))}>
+          Limpar faixas
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Com faixas preenchidas, elas substituem a tarifa única acima. Confira os valores no simulador de custos do Mercado Livre: eles mudam de tempos em tempos.
+      </p>
+    </fieldset>
+  );
+}
+
 function ChannelForm({ c, accounts }: { c?: Channel; accounts: Account[] }) {
   return (
     <>
@@ -133,12 +200,15 @@ function ChannelForm({ c, accounts }: { c?: Channel; accounts: Account[] }) {
         <Field label="Comissão Premium (%)">
           <Input name="commissionPremium" type="number" step="0.01" min="0" max="100" defaultValue={c?.commissionPremium ?? 17} required />
         </Field>
-        <Field label="Tarifa por unidade (R$)">
+        <Field label="Tarifa única por unidade (R$)">
           <Input name="fixedFee" type="number" step="0.01" min="0" defaultValue={c?.fixedFee ?? 0} required />
         </Field>
         <Field label="Cobrada abaixo de (R$)">
           <Input name="fixedFeeThreshold" type="number" step="0.01" min="0" defaultValue={c?.fixedFeeThreshold ?? 79} required />
         </Field>
+      </div>
+      <FeeTiersEditor c={c} />
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Anúncios pagos (% da venda)">
           <Input name="adsRate" type="number" step="0.01" min="0" max="100" defaultValue={c?.adsRate ?? 0} />
         </Field>
@@ -161,10 +231,22 @@ function ChannelForm({ c, accounts }: { c?: Channel; accounts: Account[] }) {
           <input type="checkbox" name="active" defaultChecked={c.active} /> Canal ativo
         </label>
       )}
-      <p className="text-xs text-muted-foreground">Confira a comissão da sua categoria na central de vendedores do canal. Mudanças valem só para vendas novas.</p>
+      <p className="text-xs text-muted-foreground">
+        A comissão padrão vale para produtos sem comissão própria (a da categoria fica no cadastro do produto). Mudanças valem só para vendas novas.
+      </p>
     </>
   );
 }
+
+const tiersFrom = (fd: FormData) => {
+  const out: { below: string; fee: string; half: boolean }[] = [];
+  for (let i = 0; i < TIER_ROWS; i++) {
+    const below = String(fd.get(`tierBelow_${i}`) ?? "").trim();
+    if (!below) continue;
+    out.push({ below, fee: String(fd.get(`tierFee_${i}`) ?? "").trim() || "0", half: fd.get(`tierHalf_${i}`) === "on" });
+  }
+  return out;
+};
 
 const channelBody = (fd: FormData) => ({
   name: fd.get("name"),
@@ -172,6 +254,8 @@ const channelBody = (fd: FormData) => ({
   commissionPremium: fd.get("commissionPremium"),
   fixedFee: fd.get("fixedFee"),
   fixedFeeThreshold: fd.get("fixedFeeThreshold"),
+  feeTiers: tiersFrom(fd),
+  feeOwnShippingOnly: fd.get("feeOwnShippingOnly") === "on",
   adsRate: fd.get("adsRate") || 0,
   releaseDays: fd.get("releaseDays"),
   accountId: fd.get("accountId"),
@@ -379,7 +463,9 @@ export function SettingsView({
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Clássico {fmtPct(c.commissionClassic)} · Premium {fmtPct(c.commissionPremium)}
-                    {c.fixedFee > 0 && ` · ${brl(c.fixedFee)}/un. abaixo de ${brl(c.fixedFeeThreshold)}`}
+                    {c.feeTiers && c.feeTiers.length > 0
+                      ? ` · tarifa por faixa (${c.feeTiers.map((t) => `<${brl(t.below)}: ${t.half ? "½ preço" : brl(t.fee)}`).join(", ")})${c.feeOwnShippingOnly ? " só no Flex/envio próprio" : ""}`
+                      : c.fixedFee > 0 && ` · ${brl(c.fixedFee)}/un. abaixo de ${brl(c.fixedFeeThreshold)}`}
                     {c.adsRate > 0 && ` · ads ${fmtPct(c.adsRate)}`} · libera em {c.releaseDays} dias
                   </p>
                 </div>

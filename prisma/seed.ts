@@ -1,5 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { ML_FEE_TIERS } from "../src/lib/pricing";
 
 const db = new PrismaClient();
 
@@ -156,11 +157,19 @@ async function main() {
     // Valores de referência: confira a comissão da sua categoria nas centrais de vendedor.
     await db.channel.createMany({
       data: [
-        { name: "Mercado Livre", commissionClassic: 12, commissionPremium: 17, fixedFee: 6.5, fixedFeeThreshold: 79, releaseDays: 7, accountId: mp?.id },
+        { name: "Mercado Livre", commissionClassic: 12, commissionPremium: 17, fixedFee: 0, fixedFeeThreshold: 79, feeTiers: ML_FEE_TIERS, feeOwnShippingOnly: true, releaseDays: 7, accountId: mp?.id },
         { name: "Amazon", commissionClassic: 12, commissionPremium: 12, fixedFee: 4.5, fixedFeeThreshold: 79, releaseDays: 14, accountId: amz?.id },
         { name: "Loja própria", commissionClassic: 4.99, commissionPremium: 4.99, fixedFee: 0, fixedFeeThreshold: 0, releaseDays: 30, accountId: bank?.id },
       ],
     });
+  }
+
+  // Regras de 2026 do Mercado Livre em quem ainda está na tarifa antiga (só uma vez: faixas vazias = ainda não ajustado).
+  // Para desligar depois, salve o canal sem faixas em Configurações (fica [] e não é mais alterado).
+  const ml = await db.channel.findFirst({ where: { name: { contains: "Mercado Livre", mode: "insensitive" }, feeTiers: { equals: Prisma.DbNull } } });
+  if (ml) {
+    await db.channel.update({ where: { id: ml.id }, data: { feeTiers: ML_FEE_TIERS, feeOwnShippingOnly: true, fixedFee: 0 } });
+    console.log("Canal Mercado Livre atualizado para as tarifas de 2026 (faixas no envio próprio/Flex).");
   }
 
   for (const [name, type, group] of CATEGORIES) {

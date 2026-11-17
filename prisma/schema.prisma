@@ -24,6 +24,12 @@ enum ListingType {
   PREMIUM
 }
 
+/// Mercado Envios (Full, Coleta, Agência) ou entrega própria (Flex, envio por conta)
+enum ShipMode {
+  MERCADO_ENVIOS
+  PROPRIO
+}
+
 enum SaleStatus {
   OK
   CANCELED
@@ -126,21 +132,25 @@ model Settings {
 }
 
 model Channel {
-  id                String   @id @default(cuid())
-  name              String   @unique
-  commissionClassic Decimal  @default(12) @db.Decimal(7, 4)
-  commissionPremium Decimal  @default(17) @db.Decimal(7, 4)
+  id                 String   @id @default(cuid())
+  name               String   @unique
+  commissionClassic  Decimal  @default(12) @db.Decimal(7, 4)
+  commissionPremium  Decimal  @default(17) @db.Decimal(7, 4)
   /// Tarifa por unidade cobrada abaixo do limite de preço (ex.: R$ 6,50 abaixo de R$ 79)
-  fixedFee          Decimal  @default(0) @db.Decimal(14, 2)
-  fixedFeeThreshold Decimal  @default(79) @db.Decimal(14, 2)
+  fixedFee           Decimal  @default(0) @db.Decimal(14, 2)
+  fixedFeeThreshold  Decimal  @default(79) @db.Decimal(14, 2)
+  /// Faixas de tarifa por unidade [{ below, fee, half? }]; quando preenchidas substituem fixedFee/fixedFeeThreshold
+  feeTiers           Json?
+  /// Tarifa por unidade só no envio próprio/Flex (Mercado Livre: Full/Coleta/Agência não pagam desde 02/03/2026)
+  feeOwnShippingOnly Boolean  @default(false)
   /// Percentual estimado de anúncios pagos sobre a venda
-  adsRate           Decimal  @default(0) @db.Decimal(7, 4)
+  adsRate            Decimal  @default(0) @db.Decimal(7, 4)
   /// Dias até o dinheiro ser liberado
-  releaseDays       Int      @default(0)
-  accountId         String?
-  account           Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  active            Boolean  @default(true)
-  sales             Sale[]
+  releaseDays        Int      @default(0)
+  accountId          String?
+  account            Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  active             Boolean  @default(true)
+  sales              Sale[]
 }
 
 model Supplier {
@@ -161,35 +171,42 @@ model Supplier {
 }
 
 model Product {
-  id              String      @id @default(cuid())
-  sku             String      @unique
-  name            String
+  id                String       @id @default(cuid())
+  sku               String       @unique
+  name              String
   /// Custo médio unitário
-  cost            Decimal     @default(0) @db.Decimal(14, 2)
+  cost              Decimal      @default(0) @db.Decimal(14, 2)
   /// Embalagem e insumos por unidade
-  packaging       Decimal     @default(0) @db.Decimal(14, 2)
-  /// Frete médio pago pelo vendedor por unidade (estimativa)
-  shipping        Decimal     @default(0) @db.Decimal(14, 2)
+  packaging         Decimal      @default(0) @db.Decimal(14, 2)
+  /// Custo de envio do Mercado Envios (Full/Coleta/Agência) por unidade, do simulador do ML
+  shipping          Decimal      @default(0) @db.Decimal(14, 2)
+  /// Custo da entrega própria/Flex por unidade
+  shippingOwn       Decimal      @default(0) @db.Decimal(14, 2)
+  /// Forma de envio padrão do produto
+  shipMode          ShipMode     @default(MERCADO_ENVIOS)
+  /// Comissão da categoria do produto (%); vazio = padrão do canal
+  commissionClassic Decimal?     @db.Decimal(7, 4)
+  commissionPremium Decimal?     @db.Decimal(7, 4)
   /// Preço de venda atual (referência)
-  price           Decimal     @default(0) @db.Decimal(14, 2)
-  stock           Int         @default(0)
-  stage           ProductStage @default(TESTING)
+  price             Decimal      @default(0) @db.Decimal(14, 2)
+  stock             Int          @default(0)
+  stage             ProductStage @default(TESTING)
   /// Peso em gramas (filtro do produto ideal)
-  weightG         Int?
+  weightG           Int?
   /// Exige certificação (ANATEL, INMETRO, ANVISA) ou marca de terceiros
-  needsCert       Boolean     @default(false)
-  testStartedAt   DateTime?   @db.Date
-  researchNotes   String?
-  minStock        Int         @default(0)
-  supplierId      String?
-  supplier        Supplier?   @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  active          Boolean     @default(true)
-  createdAt       DateTime    @default(now())
-  sales           Sale[]
-  moves           StockMove[]
-  quotes          Quote[]
-  adSpends        AdSpend[]
-  adDaily         AdDaily[]
+  needsCert         Boolean      @default(false)
+  testStartedAt     DateTime?    @db.Date
+  researchNotes     String?
+  minStock          Int          @default(0)
+  supplierId        String?
+  supplier          Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  active            Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  sales             Sale[]
+  moves             StockMove[]
+  quotes            Quote[]
+  adSpends          AdSpend[]
+  adDaily           AdDaily[]
 }
 
 model StockMove {
@@ -213,6 +230,7 @@ model Sale {
   productId   String
   product     Product     @relation(fields: [productId], references: [id])
   listingType ListingType @default(CLASSICO)
+  shipMode    ShipMode    @default(MERCADO_ENVIOS)
   qty         Int
   /// Preço unitário
   price       Decimal     @db.Decimal(14, 2)
@@ -236,11 +254,11 @@ model Sale {
 }
 
 model Account {
-  id             String       @id @default(cuid())
-  name           String       @unique
-  type           AccountType  @default(BANK)
-  initialBalance Decimal      @default(0) @db.Decimal(14, 2)
-  active         Boolean      @default(true)
+  id             String           @id @default(cuid())
+  name           String           @unique
+  type           AccountType      @default(BANK)
+  initialBalance Decimal          @default(0) @db.Decimal(14, 2)
+  active         Boolean          @default(true)
   entries        Entry[]
   channels       Channel[]
   moves          InvestmentMove[]
@@ -423,12 +441,12 @@ model AdDaily {
 
 /// Configuração de integrações (token guardado criptografado)
 model Integration {
-  id          String    @id
+  id         String    @id
   /// Configuração não secreta (contas, versão da API...)
-  config      Json      @default("{}")
+  config     Json      @default("{}")
   /// Segredo criptografado (AES-256-GCM com chave derivada do AUTH_SECRET)
-  secret      String?
-  lastSyncAt  DateTime?
-  lastError   String?
-  updatedAt   DateTime  @updatedAt
+  secret     String?
+  lastSyncAt DateTime?
+  lastError  String?
+  updatedAt  DateTime  @updatedAt
 }

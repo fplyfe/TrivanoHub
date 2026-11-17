@@ -1,5 +1,5 @@
 import { db, plain } from "@/lib/db";
-import { channelRates, taxRateFor } from "@/lib/biz";
+import { channelRates, PRODUCT_RATES_SELECT, taxRateFor } from "@/lib/biz";
 import { currentMonth } from "@/lib/dates";
 import { PageHeader } from "@/components/ui/misc";
 import { QuotesView } from "./quotes-view";
@@ -10,7 +10,7 @@ export default async function QuotesPage() {
   const [quotes, products, suppliers, accounts, channel, tax] = await Promise.all([
     db.quote.findMany({
       include: {
-        product: { select: { name: true, sku: true, price: true, packaging: true, shipping: true, cost: true } },
+        product: { select: { name: true, sku: true, price: true, packaging: true, cost: true, ...PRODUCT_RATES_SELECT } },
         offers: { include: { supplier: { select: { name: true } } } },
       },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],

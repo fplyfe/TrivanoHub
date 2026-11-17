@@ -8,7 +8,7 @@ import { Badge, Empty } from "@/components/ui/misc";
 import { ActionButton, DeleteButton, FormDialog } from "@/components/app/form-dialog";
 import { api } from "@/lib/client";
 import { today } from "@/lib/dates";
-import { computeProfit, fixedFeeFor, type ChannelRates } from "@/lib/pricing";
+import { computeProfit, unitCharges, type ChannelRates, type ProductRates } from "@/lib/pricing";
 import { brl, cn, fmtDate, fmtPct, QUOTE_LABEL } from "@/lib/utils";
 
 type Offer = {
@@ -27,7 +27,7 @@ type Quote = {
   status: "OPEN" | "APPROVED" | "CANCELED";
   note: string | null;
   createdAt: string;
-  product: { name: string; sku: string; price: number; packaging: number; shipping: number; cost: number };
+  product: ProductRates & { name: string; sku: string; price: number; packaging: number; cost: number };
   offers: Offer[];
 };
 type Opt = { id: string; name: string };
@@ -55,9 +55,7 @@ export function QuotesView({
       qty: 1,
       cost,
       packaging: q.product.packaging,
-      shipping: q.product.shipping,
-      commissionRate: channel.commissionClassic,
-      fixedFee: fixedFeeFor(channel, q.product.price),
+      ...unitCharges(channel, q.product, q.product.price, "CLASSICO"),
       adsRate: channel.adsRate,
       taxRate,
     });

@@ -29,6 +29,19 @@ export const channelSchema = z.object({
   commissionPremium: pct,
   fixedFee: money0,
   fixedFeeThreshold: money0,
+  feeTiers: z
+    .array(
+      z.object({
+        below: z.coerce.number().positive("Faixa: informe o preço limite").max(999_999),
+        fee: z.coerce.number().min(0, "Faixa: tarifa inválida").max(9_999).default(0),
+        half: z.boolean().default(false),
+      }),
+    )
+    .max(8, "Máximo de 8 faixas")
+    .default([])
+    .refine((t) => new Set(t.map((x) => x.below)).size === t.length, "Faixas com o mesmo preço limite")
+    .transform((t) => [...t].sort((a, b) => a.below - b.below).map((x) => (x.half ? { below: x.below, fee: 0, half: true } : { below: x.below, fee: x.fee }))),
+  feeOwnShippingOnly: z.boolean().default(false),
   adsRate: pct.default(0),
   releaseDays: z.coerce.number().int().min(0).max(120),
   accountId: optId,
@@ -41,6 +54,10 @@ export const productSchema = z.object({
   cost: money0,
   packaging: money0.default(0),
   shipping: money0.default(0),
+  shippingOwn: money0.default(0),
+  shipMode: z.enum(["MERCADO_ENVIOS", "PROPRIO"]).default("MERCADO_ENVIOS"),
+  commissionClassic: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0, "Comissão inválida").max(100).nullable()).default(null),
+  commissionPremium: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().min(0, "Comissão inválida").max(100).nullable()).default(null),
   price: money0.default(0),
   minStock: z.coerce.number().int().min(0).default(0),
   supplierId: optId,
@@ -84,6 +101,7 @@ export const saleSchema = z.object({
   channelId: z.string().min(1, "Escolha o canal"),
   productId: z.string().min(1, "Escolha o produto"),
   listingType: z.enum(["CLASSICO", "PREMIUM"]),
+  shipMode: z.preprocess((v) => (v === "" ? null : v), z.enum(["MERCADO_ENVIOS", "PROPRIO"]).nullable().optional()),
   qty: z.coerce.number().int().min(1, "Quantidade mínima 1"),
   price: money,
   shipping: optMoney,

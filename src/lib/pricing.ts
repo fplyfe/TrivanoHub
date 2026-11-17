@@ -1,11 +1,34 @@
 // Cálculo de lucro, preço ideal e imposto. Funções puras: servem no servidor e no navegador.
 
+/** Forma de envio: Mercado Envios (Full, Coleta, Agência) ou entrega própria (Flex, Correios por conta). */
+export type ShipMode = "MERCADO_ENVIOS" | "PROPRIO";
+export const SHIP_MODE_LABEL: Record<ShipMode, string> = {
+  MERCADO_ENVIOS: "Full / Coleta / Agência",
+  PROPRIO: "Flex / envio próprio",
+};
+
+/** Faixa de tarifa por unidade: vale para preço abaixo de `below`; `half` = metade do preço. */
+export type FeeTier = { below: number; fee: number; half?: boolean };
+
 export type ChannelRates = {
   commissionClassic: number; // %
   commissionPremium: number; // %
-  fixedFee: number; // R$ por unidade abaixo do limite
+  fixedFee: number; // R$ por unidade abaixo do limite (usado quando não há faixas)
   fixedFeeThreshold: number; // R$
   adsRate: number; // %
+  /** Faixas de tarifa por unidade (substituem fixedFee/fixedFeeThreshold quando preenchidas) */
+  feeTiers: FeeTier[] | null;
+  /** Tarifa por unidade só no envio próprio/Flex (regra do Mercado Livre desde 02/03/2026) */
+  feeOwnShippingOnly: boolean;
+};
+
+/** Dados do produto que mudam as tarifas. */
+export type ProductRates = {
+  shipping: number; // custo de envio no Mercado Envios por unidade (do simulador do ML)
+  shippingOwn: number; // custo da entrega própria/Flex por unidade
+  shipMode: ShipMode; // envio padrão
+  commissionClassic: number | null; // % da categoria (vazio = padrão do canal)
+  commissionPremium: number | null;
 };
 
 export type ProfitInput = {
@@ -37,12 +60,35 @@ export type ProfitResult = {
 
 export const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 
-export function commissionFor(ch: ChannelRates, listing: "CLASSICO" | "PREMIUM") {
+export function commissionFor(ch: ChannelRates, listing: "CLASSICO" | "PREMIUM", prod?: Pick<ProductRates, "commissionClassic" | "commissionPremium"> | null) {
+  const own = listing === "PREMIUM" ? prod?.commissionPremium : prod?.commissionClassic;
+  if (own != null && own > 0) return own;
   return listing === "PREMIUM" ? ch.commissionPremium : ch.commissionClassic;
 }
 
-export function fixedFeeFor(ch: ChannelRates, price: number) {
+/** Tarifa por unidade no preço informado, conforme as faixas do canal e a forma de envio. */
+export function fixedFeeFor(ch: ChannelRates, price: number, mode: ShipMode) {
+  if (ch.feeOwnShippingOnly && mode === "MERCADO_ENVIOS") return 0;
+  if (ch.feeTiers && ch.feeTiers.length > 0) {
+    const tier = [...ch.feeTiers].sort((x, y) => x.below - y.below).find((t) => price < t.below);
+    if (!tier) return 0;
+    return tier.half ? round2(price / 2) : tier.fee;
+  }
   return price < ch.fixedFeeThreshold ? ch.fixedFee : 0;
+}
+
+/** Frete por unidade pago pela loja na forma de envio escolhida. */
+export function shippingFor(prod: Pick<ProductRates, "shipping" | "shippingOwn">, mode: ShipMode) {
+  return mode === "PROPRIO" ? prod.shippingOwn : prod.shipping;
+}
+
+/** Comissão, tarifa por unidade e frete de uma venda. */
+export function unitCharges(ch: ChannelRates, prod: ProductRates, price: number, listing: "CLASSICO" | "PREMIUM", mode: ShipMode = prod.shipMode) {
+  return {
+    commissionRate: commissionFor(ch, listing, prod),
+    fixedFee: fixedFeeFor(ch, price, mode),
+    shipping: shippingFor(prod, mode),
+  };
 }
 
 export function computeProfit(i: ProfitInput): ProfitResult {
@@ -63,33 +109,59 @@ export function computeProfit(i: ProfitInput): ProfitResult {
 
 /**
  * Preço mínimo para atingir a margem desejada:
- * P = (custo + embalagem + frete + tarifa fixa) / (1 − comissão − imposto − ads − margem).
- * Como a tarifa fixa depende da faixa de preço, recalcula até estabilizar.
+ * P = (custo + embalagem + frete + tarifa por unidade) / (1 − comissão − imposto − ads − margem).
+ * A tarifa muda por faixa de preço; resolve faixa a faixa e fica com o menor preço que atinge a margem.
  */
 export function idealPrice(args: {
   ch: ChannelRates;
-  listing: "CLASSICO" | "PREMIUM";
+  commissionRate: number; // %
+  mode: ShipMode;
   cost: number;
   packaging: number;
   shipping: number;
   taxRate: number;
   margin: number; // % desejada
 }): number | null {
-  const pct = (commissionFor(args.ch, args.listing) + args.taxRate + args.ch.adsRate + args.margin) / 100;
+  const pct = (args.commissionRate + args.taxRate + args.ch.adsRate + args.margin) / 100;
   if (pct >= 1) return null;
   const base = args.cost + args.packaging + args.shipping;
-  let fee = args.ch.fixedFee; // começa supondo que cai na faixa com tarifa
-  let price = 0;
-  for (let i = 0; i < 5; i++) {
-    price = round2((base + fee) / (1 - pct));
-    const next = fixedFeeFor(args.ch, price);
-    if (next === fee) break;
-    fee = next;
+  const fee = (p: number) => fixedFeeFor(args.ch, p, args.mode);
+  const reaches = (p: number) => p * (1 - pct) - base - fee(p) >= -1e-9;
+
+  const cuts = new Set<number>([0]);
+  if (args.ch.feeTiers && args.ch.feeTiers.length > 0) args.ch.feeTiers.forEach((t) => cuts.add(t.below));
+  else cuts.add(args.ch.fixedFeeThreshold);
+  const edges = [...cuts].filter((v) => v >= 0).sort((x, y) => x - y);
+  edges.push(Infinity);
+
+  const found: number[] = [];
+  for (let i = 0; i < edges.length - 1; i++) {
+    const lo = edges[i];
+    const hi = edges[i + 1];
+    const mid = Number.isFinite(hi) ? (lo + hi) / 2 : lo + 1;
+    const tier = args.ch.feeTiers?.length ? [...args.ch.feeTiers].sort((x, y) => x.below - y.below).find((t) => mid < t.below) : undefined;
+    const half = !!tier?.half && !(args.ch.feeOwnShippingOnly && args.mode === "MERCADO_ENVIOS");
+    let p: number;
+    if (half) {
+      const d = 1 - pct - 0.5;
+      if (d <= 0) continue;
+      p = base / d;
+    } else {
+      p = (base + fee(mid)) / (1 - pct);
+    }
+    p = Math.max(p, lo);
+    p = Math.ceil(p * 100 - 1e-6) / 100;
+    if (p < hi && reaches(p)) found.push(p);
   }
-  // Se sem a tarifa o preço cai abaixo do limite, a tarifa volta: usa o limite como piso.
-  if (fixedFeeFor(args.ch, price) !== fee) price = round2(Math.max(price, args.ch.fixedFeeThreshold));
-  return price;
+  return found.length ? Math.min(...found) : null;
 }
+
+/** Faixas atuais do Mercado Livre no envio próprio/Flex (referência; confira no simulador da sua conta). */
+export const ML_FEE_TIERS: FeeTier[] = [
+  { below: 19, fee: 6.25 },
+  { below: 49, fee: 6.65 },
+  { below: 79, fee: 7.75 },
+];
 
 /** Simples Nacional, Anexo I (comércio). Limites de RBT12, alíquota nominal (%) e parcela a deduzir. */
 export const SIMPLES_ANEXO_I = [

@@ -22,3 +22,35 @@ expect(await call("/api/suppliers", "POST", { name: "Outro", phone: "11987654321
 expect(await call("/api/suppliers", "POST", { name: "Sem Telefone" }), 400, "telefone obrigatório");
 expect(await call(`/api/suppliers/${id}`, "PUT", { name: "Fornecedor Teste", phone: "+86 138 1234 5678", email: "vendas@teste.com.br", link: "", active: true }), 200, "editar mesmo registro");
 console.log("Fornecedores OK");
+
+
+// ---- Tarifas do Mercado Livre (2026): faixas só no Flex, custo de envio no Full/Coleta ----
+const { createRequire } = await import("node:module");
+const { PrismaClient } = createRequire(process.cwd() + "/")("@prisma/client");
+const db = new PrismaClient();
+const ml = await db.channel.findFirst({ where: { name: "Mercado Livre" } });
+console.log("canal ML", JSON.stringify(ml.feeTiers), ml.feeOwnShippingOnly, String(ml.fixedFee));
+if (!Array.isArray(ml.feeTiers) || ml.feeTiers.length !== 3 || !ml.feeOwnShippingOnly) fail("canal ML sem as faixas de 2026");
+
+const prod = await call("/api/products", "POST", {
+  sku: "TESTE-1", name: "Produto Teste", cost: 10, packaging: 1, shipping: 6.85, shippingOwn: 3, shipMode: "MERCADO_ENVIOS",
+  commissionClassic: 11, commissionPremium: "", price: 40, minStock: 0, supplierId: "", weightG: "", researchNotes: "",
+});
+expect(prod, 200, "produto com envio e comissão própria");
+const sale = (shipMode) => call("/api/sales", "POST", { date: "2026-11-10", channelId: ml.id, productId: prod.json.id, listingType: "CLASSICO", shipMode, qty: 1, price: 40, shipping: "", externalId: "", note: "" });
+let s1 = await sale("MERCADO_ENVIOS");
+expect(s1, 200, "venda Full/Coleta");
+if (Number(s1.json.fixedFee) !== 0 || Number(s1.json.shipping) !== 6.85 || Number(s1.json.commission) !== 4.4 || s1.json.shipMode !== "MERCADO_ENVIOS") fail("venda Full/Coleta com valores errados");
+let s2 = await sale("PROPRIO");
+expect(s2, 200, "venda Flex");
+if (Number(s2.json.fixedFee) !== 6.65 || Number(s2.json.shipping) !== 3 || s2.json.shipMode !== "PROPRIO") fail("venda Flex com valores errados");
+let s3 = await call("/api/sales", "POST", { date: "2026-11-10", channelId: ml.id, productId: prod.json.id, listingType: "PREMIUM", qty: 1, price: 60, shipping: "" });
+expect(s3, 200, "venda sem envio informado (usa o do produto)");
+if (s3.json.shipMode !== "MERCADO_ENVIOS" || Number(s3.json.commission) !== 10.2) fail("venda padrão: envio do produto e comissão Premium do canal (17%)");
+for (const path of ["/calculator", "/sales", "/products", "/quotes", "/funnel", "/settings"]) {
+  const r = await fetch(B + path, { headers: { cookie } });
+  console.log("página", path, r.status);
+  if (r.status !== 200) fail("página " + path);
+}
+await db.$disconnect();
+console.log("Tarifas OK");

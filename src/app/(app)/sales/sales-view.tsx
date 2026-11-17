@@ -11,7 +11,7 @@ import { ActionButton, DeleteButton, FormDialog } from "@/components/app/form-di
 import { Row } from "@/components/app/stat";
 import { api } from "@/lib/client";
 import { today } from "@/lib/dates";
-import { commissionFor, computeProfit, fixedFeeFor, type ChannelRates } from "@/lib/pricing";
+import { computeProfit, unitCharges, type ChannelRates, type ProductRates, type ShipMode } from "@/lib/pricing";
 import { brl, cn, fmtDate, fmtPct, LISTING_LABEL } from "@/lib/utils";
 
 type Sale = {
@@ -34,7 +34,7 @@ type Sale = {
   product: { name: string; sku: string };
   channel: { name: string };
 };
-type Product = { id: string; name: string; sku: string; cost: number; packaging: number; shipping: number; price: number; stock: number };
+type Product = ProductRates & { id: string; name: string; sku: string; cost: number; packaging: number; price: number; stock: number };
 type Channel = ChannelRates & { id: string; name: string };
 
 function SaleForm({ products, channels, taxRate }: { products: Product[]; channels: Channel[]; taxRate: number }) {
@@ -45,22 +45,24 @@ function SaleForm({ products, channels, taxRate }: { products: Product[]; channe
   const [price, setPrice] = useState(p?.price ? String(p.price) : "");
   const [qty, setQty] = useState("1");
   const [shipping, setShipping] = useState("");
+  const [shipMode, setShipMode] = useState<ShipMode>(p?.shipMode ?? "MERCADO_ENVIOS");
   const ch = channels.find((c) => c.id === channelId);
+  const u = p && ch ? unitCharges(ch, p, Number(price) || 0, listing, shipMode) : null;
 
   const preview = useMemo(() => {
-    if (!p || !ch || !Number(price)) return null;
+    if (!p || !ch || !u || !Number(price)) return null;
     return computeProfit({
       price: Number(price),
       qty: Number(qty) || 1,
       cost: p.cost,
       packaging: p.packaging,
-      shipping: shipping === "" ? p.shipping : Number(shipping),
-      commissionRate: commissionFor(ch, listing),
-      fixedFee: fixedFeeFor(ch, Number(price)),
+      shipping: shipping === "" ? u.shipping : Number(shipping),
+      commissionRate: u.commissionRate,
+      fixedFee: u.fixedFee,
       adsRate: ch.adsRate,
       taxRate,
     });
-  }, [p, ch, price, qty, shipping, listing, taxRate]);
+  }, [p, ch, u, price, qty, shipping, taxRate]);
 
   return (
     <>
@@ -72,6 +74,7 @@ function SaleForm({ products, channels, taxRate }: { products: Product[]; channe
             setProductId(e.target.value);
             const np = products.find((x) => x.id === e.target.value);
             if (np?.price) setPrice(String(np.price));
+            if (np) setShipMode(np.shipMode);
           }}
           required
         >
@@ -104,13 +107,19 @@ function SaleForm({ products, channels, taxRate }: { products: Product[]; channe
         <Field label="Quantidade">
           <Input name="qty" type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} required />
         </Field>
+        <Field label="Envio">
+          <Select name="shipMode" value={shipMode} onChange={(e) => setShipMode(e.target.value as ShipMode)}>
+            <option value="MERCADO_ENVIOS">Full / Coleta / Agência</option>
+            <option value="PROPRIO">Flex / envio próprio</option>
+          </Select>
+        </Field>
         <Field label="Frete pago pela loja (un.)">
           <Input
             name="shipping"
             type="number"
             step="0.01"
             min="0"
-            placeholder={p ? `padrão ${brl(p.shipping)}` : ""}
+            placeholder={u ? `padrão ${brl(u.shipping)}` : ""}
             value={shipping}
             onChange={(e) => setShipping(e.target.value)}
           />
@@ -125,7 +134,8 @@ function SaleForm({ products, channels, taxRate }: { products: Product[]; channe
       {preview && (
         <div className="rounded-lg border bg-secondary/40 p-3">
           <Row label="Faturamento" value={brl(preview.gross)} />
-          <Row label="Comissão + tarifa fixa" value={`− ${brl(preview.commission + preview.fixedFee)}`} />
+          <Row label={`Comissão (${fmtPct(u?.commissionRate ?? 0)})`} value={`− ${brl(preview.commission)}`} />
+          {preview.fixedFee > 0 && <Row label="Tarifa por unidade" value={`− ${brl(preview.fixedFee)}`} />}
           <Row label="Frete" value={`− ${brl(preview.shipping)}`} />
           {preview.ads > 0 && <Row label="Anúncios (estimado)" value={`− ${brl(preview.ads)}`} />}
           <Row label={`Imposto (${fmtPct(taxRate, 2)})`} value={`− ${brl(preview.tax)}`} />
@@ -198,6 +208,7 @@ export function SalesView({
                 channelId: fd.get("channelId"),
                 productId: fd.get("productId"),
                 listingType: fd.get("listingType"),
+                shipMode: fd.get("shipMode"),
                 qty: fd.get("qty"),
                 price: fd.get("price"),
                 shipping: fd.get("shipping"),

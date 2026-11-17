@@ -1,7 +1,7 @@
 import { db, n } from "@/lib/db";
-import { mainChannel, marginBeforeAds, taxRateFor } from "@/lib/biz";
+import { mainChannel, marginBeforeAds, productRates, taxRateFor } from "@/lib/biz";
 import { addDays, currentMonth, toDate, toStr, today } from "@/lib/dates";
-import { computeProfit, fixedFeeFor } from "@/lib/pricing";
+import { computeProfit, unitCharges } from "@/lib/pricing";
 import { idealProductChecks, testAdvice } from "@/lib/growth";
 import { PageHeader } from "@/components/ui/misc";
 import { FunnelView, type FunnelCard } from "./funnel-view";
@@ -30,9 +30,7 @@ export default async function FunnelPage() {
             qty: 1,
             cost: n(p.cost),
             packaging: n(p.packaging),
-            shipping: n(p.shipping),
-            commissionRate: ch.commissionClassic,
-            fixedFee: fixedFeeFor(ch, price),
+            ...unitCharges(ch, productRates(p), price, "CLASSICO"),
             adsRate: ch.adsRate,
             taxRate,
           }).margin

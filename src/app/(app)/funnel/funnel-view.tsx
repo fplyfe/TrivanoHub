@@ -71,7 +71,7 @@ function CandidateForm() {
         <Field label="Custo no fornecedor (R$)">
           <Input name="cost" type="number" step="0.01" min="0" required />
         </Field>
-        <Field label="Frete estimado pago pela loja (R$)">
+        <Field label="Custo de envio ML estimado (R$/un.)">
           <Input name="shipping" type="number" step="0.01" min="0" defaultValue={0} />
         </Field>
         <Field label="Peso com embalagem (g)">

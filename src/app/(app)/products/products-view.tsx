@@ -9,7 +9,7 @@ import { Badge, Empty } from "@/components/ui/misc";
 import { DeleteButton, FormDialog } from "@/components/app/form-dialog";
 import { api } from "@/lib/client";
 import { today } from "@/lib/dates";
-import { computeProfit, fixedFeeFor, type ChannelRates } from "@/lib/pricing";
+import { computeProfit, unitCharges, type ChannelRates, type ShipMode } from "@/lib/pricing";
 import { brl, cn, fmtDate, fmtPct } from "@/lib/utils";
 
 type Move = { id: string; type: "IN" | "OUT" | "ADJUST"; qty: number; note: string | null; date: string };
@@ -20,6 +20,10 @@ type Product = {
   cost: number;
   packaging: number;
   shipping: number;
+  shippingOwn: number;
+  shipMode: ShipMode;
+  commissionClassic: number | null;
+  commissionPremium: number | null;
   price: number;
   stock: number;
   minStock: number;
@@ -39,6 +43,10 @@ const productBody = (fd: FormData) => ({
   cost: fd.get("cost"),
   packaging: fd.get("packaging"),
   shipping: fd.get("shipping"),
+  shippingOwn: fd.get("shippingOwn"),
+  shipMode: fd.get("shipMode"),
+  commissionClassic: fd.get("commissionClassic"),
+  commissionPremium: fd.get("commissionPremium"),
   price: fd.get("price"),
   minStock: fd.get("minStock"),
   supplierId: fd.get("supplierId"),
@@ -69,9 +77,6 @@ function ProductForm({ p, suppliers }: { p?: Product; suppliers: Opt[] }) {
         <Field label="Embalagem por unidade (R$)">
           <Input name="packaging" type="number" step="0.01" min="0" defaultValue={p?.packaging ?? 0} />
         </Field>
-        <Field label="Frete médio pago pela loja (R$)">
-          <Input name="shipping" type="number" step="0.01" min="0" defaultValue={p?.shipping ?? 0} />
-        </Field>
         <Field label="Estoque mínimo">
           <Input name="minStock" type="number" min="0" defaultValue={p?.minStock ?? 0} />
         </Field>
@@ -89,6 +94,32 @@ function ProductForm({ p, suppliers }: { p?: Product; suppliers: Opt[] }) {
           </Select>
         </Field>
       </div>
+      <fieldset className="grid gap-3 rounded-lg border p-3">
+        <legend className="px-1 text-xs font-medium text-muted-foreground">Envio e tarifas do Mercado Livre (copie do simulador de custos do ML)</legend>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Field label="Envio padrão">
+            <Select name="shipMode" defaultValue={p?.shipMode ?? "MERCADO_ENVIOS"}>
+              <option value="MERCADO_ENVIOS">Full / Coleta / Agência</option>
+              <option value="PROPRIO">Flex / envio próprio</option>
+            </Select>
+          </Field>
+          <Field label="Custo de envio ML (R$/un.)">
+            <Input name="shipping" type="number" step="0.01" min="0" defaultValue={p?.shipping ?? 0} title="Full, Coleta e Agência: o custo de envio que o simulador do ML mostra para este produto (peso e preço)" />
+          </Field>
+          <Field label="Entrega própria/Flex (R$/un.)">
+            <Input name="shippingOwn" type="number" step="0.01" min="0" defaultValue={p?.shippingOwn ?? 0} title="Quanto custa você entregar (motoboy, Correios), já descontado o bônus do Flex" />
+          </Field>
+          <Field label="Comissão Clássico (%)">
+            <Input name="commissionClassic" type="number" step="0.01" min="0" max="100" defaultValue={p?.commissionClassic ?? ""} placeholder="padrão do canal" />
+          </Field>
+          <Field label="Comissão Premium (%)">
+            <Input name="commissionPremium" type="number" step="0.01" min="0" max="100" defaultValue={p?.commissionPremium ?? ""} placeholder="padrão do canal" />
+          </Field>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          A comissão muda por categoria (10–14% Clássico, 15–19% Premium). Deixe vazio para usar a do canal. A tarifa por unidade abaixo de R$ 79 entra sozinha só no Flex/envio próprio.
+        </p>
+      </fieldset>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="needsCert" defaultChecked={p?.needsCert ?? false} /> Exige certificação ou é marca de terceiros
       </label>
@@ -127,9 +158,7 @@ export function ProductsView({
       qty: 1,
       cost: p.cost,
       packaging: p.packaging,
-      shipping: p.shipping,
-      commissionRate: channel.commissionClassic,
-      fixedFee: fixedFeeFor(channel, p.price),
+      ...unitCharges(channel, p, p.price, "CLASSICO"),
       adsRate: channel.adsRate,
       taxRate,
     });

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { db, plain } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getSettings } from "@/lib/biz";
+import { getSettings, parseFeeTiers } from "@/lib/biz";
 import { SettingsView } from "./settings-view";
 
 export const metadata = { title: "Configurações" };
@@ -18,7 +18,7 @@ export default async function SettingsPage() {
   return (
     <SettingsView
       settings={plain(settings)}
-      channels={plain(channels)}
+      channels={plain(channels).map((c) => ({ ...c, feeTiers: parseFeeTiers(c.feeTiers as never) }))}
       accounts={plain(accounts)}
       categories={categories}
       me={{ name: session.name, email: session.email, role: session.role }}

@@ -118,6 +118,11 @@ jobs:
             if $C exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
               $C exec -T app node -e "fetch('http://127.0.0.1:3000/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'admin@teste.local',password:'SenhaAdmin123'})}).then(r=>{console.log('login',r.status);process.exit(r.ok?0:1)})"
               $C exec -T app node --input-type=module - < scripts/ci/smoke.mjs
+              # Banco antigo (tarifa única R$ 6,50): o migrador deve aplicar as faixas de 2026 uma vez
+              $C exec -T db psql -U trivano -d trivano -c "UPDATE \"Channel\" SET \"feeTiers\" = NULL, \"feeOwnShippingOnly\" = false, \"fixedFee\" = 6.5 WHERE name = 'Mercado Livre';"
+              $C run --rm migrate
+              $C exec -T db psql -U trivano -d trivano -tAc "SELECT \"feeTiers\"::text, \"feeOwnShippingOnly\", \"fixedFee\" FROM \"Channel\" WHERE name = 'Mercado Livre';" | tee /tmp/ml.txt
+              grep -q '"below": 79' /tmp/ml.txt && grep -q '|t|0.00' /tmp/ml.txt || { echo "Migração do canal ML falhou"; exit 1; }
               echo "Compose da Hostinger OK"; exit 0
             fi
             sleep 4

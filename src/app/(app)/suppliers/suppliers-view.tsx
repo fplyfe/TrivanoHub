@@ -1,119 +1,12 @@
 "use client";
 
-import { useState, type ComponentProps } from "react";
 import { ExternalLink, Mail, Pencil, Phone, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, Input, Textarea } from "@/components/ui/input";
 import { Badge, Empty } from "@/components/ui/misc";
 import { DeleteButton, FormDialog } from "@/components/app/form-dialog";
 import { api } from "@/lib/client";
-import { normalizeCompanyName, normalizeEmail, normalizePhone, normalizeUrl } from "@/lib/contact-rules";
-
-type Rule = (v: string) => { ok: true; value: string } | { ok: false; error: string };
-
-/** Campo que valida ao sair (e ao enviar) com a mesma regra da API; formata o valor quando válido. */
-function RuledInput({ rule, optional = true, ...props }: ComponentProps<typeof Input> & { rule: Rule; optional?: boolean }) {
-  const [error, setError] = useState("");
-  function check(el: HTMLInputElement, format: boolean) {
-    const v = el.value;
-    if (optional && v.trim() === "") {
-      el.setCustomValidity("");
-      setError("");
-      return;
-    }
-    const r = rule(v);
-    if (r.ok) {
-      if (format) el.value = r.value;
-      el.setCustomValidity("");
-      setError("");
-    } else {
-      el.setCustomValidity(r.error);
-      setError(r.error);
-    }
-  }
-  return (
-    <div className="grid gap-1">
-      <Input
-        {...props}
-        aria-invalid={error ? true : undefined}
-        className={error ? "border-destructive focus-visible:ring-destructive" : undefined}
-        onBlur={(e) => check(e.currentTarget, true)}
-        onChange={(e) => error && check(e.currentTarget, false)}
-        onInvalid={(e) => check(e.currentTarget, false)}
-      />
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  );
-}
-
-type Supplier = {
-  id: string;
-  name: string;
-  contact: string | null;
-  phone: string | null;
-  email: string | null;
-  link: string | null;
-  leadDays: number | null;
-  notes: string | null;
-  active: boolean;
-  _count: { products: number };
-};
-
-const body = (fd: FormData) => ({
-  name: fd.get("name"),
-  phone: fd.get("phone"),
-  email: fd.get("email"),
-  link: fd.get("link"),
-  notes: fd.get("notes"),
-  active: fd.get("active") !== null ? fd.get("active") === "on" : true,
-});
-
-function SupplierForm({ s }: { s?: Supplier }) {
-  return (
-    <>
-      <Field label="Nome / razão social">
-        <RuledInput name="name" rule={normalizeCompanyName} optional={false} defaultValue={s?.name} required maxLength={80} autoFocus />
-      </Field>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Telefone / WhatsApp">
-          <RuledInput
-            name="phone"
-            rule={normalizePhone}
-            optional={false}
-            required
-            defaultValue={s?.phone ?? ""}
-            maxLength={25}
-            inputMode="tel"
-            placeholder="(11) 98765-4321 ou +86…"
-          />
-        </Field>
-        <Field label="E-mail (opcional)">
-          <RuledInput name="email" rule={normalizeEmail} type="email" defaultValue={s?.email ?? ""} maxLength={120} placeholder="vendas@fornecedor.com.br" />
-        </Field>
-      </div>
-      <Field label="Link (opcional)">
-        <RuledInput
-          name="link"
-          rule={normalizeUrl}
-          defaultValue={s?.link ?? ""}
-          maxLength={500}
-          inputMode="url"
-          autoComplete="url"
-          placeholder="loja, site ou catálogo — ex.: fornecedor.com.br"
-        />
-      </Field>
-      <Field label="Observações (opcional: pedido mínimo, pagamento, prazo…)">
-        <Textarea name="notes" defaultValue={s?.notes ?? ""} maxLength={500} />
-      </Field>
-      {s && (
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="active" defaultChecked={s.active} /> Ativo
-        </label>
-      )}
-    </>
-  );
-}
+import { SUPPLIER_STAGES, SupplierForm, supplierBody as body, type Supplier } from "@/components/app/supplier-form";
 
 export function SuppliersView({ suppliers }: { suppliers: Supplier[] }) {
   return (
@@ -184,6 +77,7 @@ export function SuppliersView({ suppliers }: { suppliers: Supplier[] }) {
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   <Badge>{s._count.products} produto(s)</Badge>
                   {s.leadDays != null && <Badge>entrega em {s.leadDays} dias</Badge>}
+                  {s.stage !== "APPROVED" && <Badge tone="primary">Funil: {SUPPLIER_STAGES.find((x) => x.key === s.stage)?.label}</Badge>}
                   {!s.active && <Badge tone="danger">Inativo</Badge>}
                 </div>
               </CardContent>

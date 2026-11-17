@@ -25,6 +25,17 @@ enum ListingType {
 }
 
 /// Mercado Envios (Full, Coleta, Agência) ou entrega própria (Flex, envio por conta)
+/// Funil de fornecedores
+enum SupplierStage {
+  PROSPECT
+  CONTACTED
+  CATALOG
+  PRICING
+  NEGOTIATING
+  APPROVED
+  DISCARDED
+}
+
 enum ShipMode {
   MERCADO_ENVIOS
   PROPRIO
@@ -164,6 +175,13 @@ model Supplier {
   leadDays  Int?
   notes     String?
   active    Boolean      @default(true)
+  /// Etapa no funil de fornecedores (os já cadastrados entram como aprovados)
+  stage     SupplierStage @default(APPROVED)
+  /// Quando entrou na etapa atual
+  stageAt   DateTime     @default(now())
+  /// Próximo passo combinado (ex.: "cobrar catálogo") e a data para fazer
+  nextStep  String?
+  followUpAt DateTime?   @db.Date
   createdAt DateTime     @default(now())
   products  Product[]
   offers    QuoteOffer[]

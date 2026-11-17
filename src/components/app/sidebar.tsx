@@ -18,6 +18,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  SquareKanban,
   Package,
   Percent,
   PlugZap,
@@ -61,6 +62,7 @@ const GROUPS: Group[] = [
     items: [
       { href: "/funnel", label: "Funil de produtos", icon: Filter },
       { href: "/products", label: "Produtos e estoque", icon: Package },
+      { href: "/supplier-funnel", label: "Funil de fornecedores", icon: SquareKanban },
       { href: "/suppliers", label: "Fornecedores", icon: Truck },
       { href: "/quotes", label: "Cotações", icon: ClipboardList },
     ],

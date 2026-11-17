@@ -48,7 +48,7 @@ test("link", () => {
 
 test("schema do fornecedor", () => {
   const r = supplierSchema.parse({ name: " Fornecedor X ", phone: "11987654321", email: "", link: "fornecedor.com.br", notes: "  " });
-  assert.deepEqual(r, { name: "Fornecedor X", phone: "(11) 98765-4321", email: null, link: "https://fornecedor.com.br/", notes: null, active: true });
+  assert.deepEqual(r, { name: "Fornecedor X", phone: "(11) 98765-4321", email: null, link: "https://fornecedor.com.br/", notes: null });
   assert.equal("contact" in r || "leadDays" in r, false); // campos antigos não enviados não são apagados
   const bad = supplierSchema.safeParse({ name: "X Ltda", phone: "", email: "a@b", link: "javascript:alert(1)" });
   assert.equal(bad.success, false);

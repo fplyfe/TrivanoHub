@@ -47,7 +47,25 @@ if (Number(s2.json.fixedFee) !== 6.65 || Number(s2.json.shipping) !== 3 || s2.js
 let s3 = await call("/api/sales", "POST", { date: "2026-11-10", channelId: ml.id, productId: prod.json.id, listingType: "PREMIUM", qty: 1, price: 60, shipping: "" });
 expect(s3, 200, "venda sem envio informado (usa o do produto)");
 if (s3.json.shipMode !== "MERCADO_ENVIOS" || Number(s3.json.commission) !== 10.2) fail("venda padrão: envio do produto e comissão Premium do canal (17%)");
-for (const path of ["/calculator", "/sales", "/products", "/quotes", "/funnel", "/settings"]) {
+// ---- Funil de fornecedores ----
+const f1 = await call("/api/suppliers", "POST", { name: "Fábrica Funil", phone: "+86 138 0000 1111", link: "1688.com/loja", stage: "PROSPECT", nextStep: "Pedir catálogo", followUpAt: "2026-11-20", notes: "" });
+expect(f1, 200, "fornecedor no funil");
+if (f1.json.stage !== "PROSPECT" || !String(f1.json.followUpAt).startsWith("2026-11-20") || f1.json.nextStep !== "Pedir catálogo") fail("criação no funil");
+const okSup = await db.supplier.findFirst({ where: { name: "Fornecedor Teste" } });
+if (okSup.stage !== "APPROVED") fail("fornecedor criado fora do funil deveria entrar aprovado");
+const f2 = await call(`/api/suppliers/${f1.json.id}/funnel`, "PATCH", { stage: "CATALOG" });
+expect(f2, 200, "mover para catálogo");
+if (f2.json.stage !== "CATALOG" || f2.json.stageAt === f1.json.stageAt) fail("etapa/data da etapa");
+const f3 = await call(`/api/suppliers/${f1.json.id}/funnel`, "PATCH", { stage: "DISCARDED" });
+if (f3.json.active !== false) fail("descartado deveria ficar inativo");
+const f4 = await call(`/api/suppliers/${f1.json.id}`, "PUT", { name: "Fábrica Funil", phone: "+8613800001111", email: "", link: "", notes: "caro", nextStep: "", followUpAt: "" });
+expect(f4, 200, "editar no funil");
+if (f4.json.active !== false || f4.json.stage !== "DISCARDED" || f4.json.nextStep !== null || f4.json.followUpAt !== null) fail("editar no funil não pode reativar nem mudar a etapa");
+expect(await call(`/api/suppliers/${f1.json.id}/funnel`, "PATCH", { stage: "NADA" }), 400, "etapa inválida");
+const f5 = await call(`/api/suppliers/${f1.json.id}/funnel`, "PATCH", { stage: "NEGOTIATING" });
+if (f5.json.active !== true) fail("voltar do descarte deveria reativar");
+
+for (const path of ["/calculator", "/sales", "/products", "/quotes", "/funnel", "/settings", "/suppliers", "/supplier-funnel"]) {
   const r = await fetch(B + path, { headers: { cookie } });
   console.log("página", path, r.status);
   if (r.status !== 200) fail("página " + path);

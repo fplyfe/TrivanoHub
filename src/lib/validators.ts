@@ -10,6 +10,7 @@ const optId = z.preprocess((v) => (v === "" || v === undefined ? null : v), z.st
 const optText = z.preprocess((v) => (v === "" || v === undefined ? null : v), z.string().max(500).nullable());
 const optInt = z.preprocess((v) => (v === "" || v === undefined || v === null ? null : v), z.coerce.number().int().min(0).nullable());
 const optMoney = z.preprocess((v) => (v === "" || v === undefined || v === null ? null : v), z.coerce.number().min(0).nullable());
+export const SUPPLIER_STAGES = ["PROSPECT", "CONTACTED", "CATALOG", "PRICING", "NEGOTIATING", "APPROVED", "DISCARDED"] as const;
 const name = (max = 80) => z.string().trim().min(1, "Informe o nome").max(max);
 
 export const settingsSchema = z.object({
@@ -163,7 +164,17 @@ export const supplierSchema = z.object({
     (v) => (v === "" || v === null ? null : v),
     z.coerce.number({ invalid_type_error: "Prazo deve ser um número" }).int("Prazo deve ser em dias inteiros").min(0, "Prazo não pode ser negativo").max(365, "Prazo máximo de 365 dias").nullable(),
   ).optional(),
-  active: z.boolean().default(true),
+  active: z.boolean().optional(), // ausente = mantém (novo: ativo)
+  // Funil: só mudam se enviados
+  stage: z.enum(SUPPLIER_STAGES).optional(),
+  nextStep: z.preprocess((v) => (typeof v === "string" ? (v.trim() === "" ? null : v.trim()) : v), z.string().max(120, "Próximo passo: máx. 120 caracteres").nullable()).optional(),
+  followUpAt: z.preprocess((v) => (v === "" ? null : v), dateStr.nullable()).optional(),
+});
+
+export const supplierFunnelSchema = z.object({
+  stage: z.enum(SUPPLIER_STAGES).optional(),
+  nextStep: z.preprocess((v) => (typeof v === "string" ? (v.trim() === "" ? null : v.trim()) : v), z.string().max(120, "Próximo passo: máx. 120 caracteres").nullable()).optional(),
+  followUpAt: z.preprocess((v) => (v === "" ? null : v), dateStr.nullable()).optional(),
 });
 
 export const quoteSchema = z.object({

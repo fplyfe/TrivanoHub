@@ -24,6 +24,8 @@ const shot = async (path, file, w, h) => {
   await page.setViewport({ width: w, height: h });
   await page.goto(B + path, { waitUntil: "networkidle0" });
   await page.screenshot({ path: `${out}/${file}`, fullPage: true });
+  const sl = await page.evaluate(() => [...document.querySelectorAll("[data-stage]")][0]?.parentElement?.parentElement?.scrollLeft ?? null);
+  console.log(file, "scrollLeft do quadro:", sl);
 };
 await shot("/supplier-funnel", "funil-fornecedores-pc.png", 1440, 900);
 await shot("/supplier-funnel", "funil-fornecedores-notebook.png", 1280, 720);

@@ -325,9 +325,9 @@ export function SupplierFunnelView({ suppliers }: { suppliers: Supplier[] }) {
       {/* Quadro: as colunas dividem a largura; se não couberem (celular/tela menor), rola para o lado */}
       <div
         ref={boardRef}
-        className="-mx-4 snap-x snap-mandatory overflow-x-auto px-4 pb-2 sm:mx-0 sm:snap-none sm:px-0"
+        className="-mx-4 snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:snap-none sm:scroll-px-0 sm:px-0"
       >
-        <div className="grid grid-cols-[repeat(6,minmax(82vw,1fr))] gap-3 sm:grid-cols-[repeat(6,minmax(15rem,1fr))] 2xl:grid-cols-[repeat(6,minmax(11rem,1fr))]">
+        <div className="grid grid-cols-[repeat(6,minmax(82vw,1fr))] items-start gap-3 lg:items-stretch sm:grid-cols-[repeat(6,minmax(15rem,1fr))] 2xl:grid-cols-[repeat(6,minmax(11rem,1fr))]">
           {BOARD.map((st) => {
             const list = items.filter((s) => s.stage === st.key);
             return (

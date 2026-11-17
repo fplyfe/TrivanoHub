@@ -149,6 +149,8 @@ model Supplier {
   contact   String?
   phone     String?
   email     String?
+  /// Site, loja ou catálogo do fornecedor
+  link      String?
   leadDays  Int?
   notes     String?
   active    Boolean      @default(true)

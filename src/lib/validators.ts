@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { normalizeCompanyName, normalizeEmail, normalizePersonName, normalizePhone } from "./contact-rules";
+import { normalizeCompanyName, normalizeEmail, normalizePersonName, normalizePhone, normalizeUrl } from "./contact-rules";
 
 const money = z.coerce.number().positive("Valor deve ser maior que zero").max(999_999_999);
 const money0 = z.coerce.number().min(0, "Valor inválido").max(999_999_999);
@@ -135,14 +135,16 @@ const ruled = (fn: (v: string) => { ok: true; value: string } | { ok: false; err
 
 export const supplierSchema = z.object({
   name: ruled(normalizeCompanyName, false).pipe(z.string()),
-  contact: ruled(normalizePersonName),
-  phone: ruled(normalizePhone),
+  phone: ruled(normalizePhone, false).pipe(z.string()),
   email: ruled(normalizeEmail),
-  leadDays: z.preprocess(
-    (v) => (v === "" || v === undefined || v === null ? null : v),
-    z.coerce.number({ invalid_type_error: "Prazo deve ser um número" }).int("Prazo deve ser em dias inteiros").min(0, "Prazo não pode ser negativo").max(365, "Prazo máximo de 365 dias").nullable(),
-  ),
+  link: ruled(normalizeUrl),
   notes: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? null : typeof v === "string" ? v.trim() : v ?? null), z.string().max(500, "Observações: máx. 500 caracteres").nullable()),
+  // Campos antigos: fora do formulário; só mudam se forem enviados (ausentes = mantém o que já está salvo)
+  contact: ruled(normalizePersonName).optional(),
+  leadDays: z.preprocess(
+    (v) => (v === "" || v === null ? null : v),
+    z.coerce.number({ invalid_type_error: "Prazo deve ser um número" }).int("Prazo deve ser em dias inteiros").min(0, "Prazo não pode ser negativo").max(365, "Prazo máximo de 365 dias").nullable(),
+  ).optional(),
   active: z.boolean().default(true),
 });
 

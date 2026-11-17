@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeCompanyName, normalizeEmail, normalizePersonName, normalizePhone } from "./contact-rules";
+import { normalizeCompanyName, normalizeEmail, normalizePersonName, normalizePhone, normalizeUrl } from "./contact-rules";
 import { supplierSchema } from "./validators";
 
 const ok = (r: { ok: boolean; value?: string }) => (r.ok ? r.value : null);
@@ -37,10 +37,20 @@ test("nomes", () => {
   assert.equal(normalizeCompanyName("!!!").ok, false);
 });
 
+test("link", () => {
+  assert.equal(ok(normalizeUrl("fornecedor.com.br")), "https://fornecedor.com.br/");
+  assert.equal(ok(normalizeUrl(" https://loja.Fornecedor.com/catalogo?x=1 ")), "https://loja.fornecedor.com/catalogo?x=1");
+  assert.equal(ok(normalizeUrl("http://1688.com/item/123")), "http://1688.com/item/123");
+  assert.equal(ok(normalizeUrl("www.aliexpress.com/store/123")), "https://www.aliexpress.com/store/123");
+  for (const u of ["javascript:alert(1)", "ftp://x.com", "fornecedor", "https://localhost", "http://user:pw@x.com", "https://exa mple.com", "mailto:a@b.com", "https://"])
+    assert.equal(normalizeUrl(u).ok, false, u);
+});
+
 test("schema do fornecedor", () => {
-  const r = supplierSchema.parse({ name: " Fornecedor X ", contact: "", phone: "11987654321", email: "", leadDays: "15", notes: "  " });
-  assert.deepEqual(r, { name: "Fornecedor X", contact: null, phone: "(11) 98765-4321", email: null, leadDays: 15, notes: null, active: true });
-  const bad = supplierSchema.safeParse({ name: "X Ltda", phone: "123", email: "a@b", leadDays: "-1" });
+  const r = supplierSchema.parse({ name: " Fornecedor X ", phone: "11987654321", email: "", link: "fornecedor.com.br", notes: "  " });
+  assert.deepEqual(r, { name: "Fornecedor X", phone: "(11) 98765-4321", email: null, link: "https://fornecedor.com.br/", notes: null, active: true });
+  assert.equal("contact" in r || "leadDays" in r, false); // campos antigos não enviados não são apagados
+  const bad = supplierSchema.safeParse({ name: "X Ltda", phone: "", email: "a@b", link: "javascript:alert(1)" });
   assert.equal(bad.success, false);
   assert.equal(bad.error!.issues.length, 3);
 });

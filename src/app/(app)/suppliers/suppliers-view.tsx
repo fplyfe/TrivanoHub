@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, type ComponentProps } from "react";
-import { Mail, Pencil, Phone, Plus } from "lucide-react";
+import { ExternalLink, Mail, Pencil, Phone, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Textarea } from "@/components/ui/input";
 import { Badge, Empty } from "@/components/ui/misc";
 import { DeleteButton, FormDialog } from "@/components/app/form-dialog";
 import { api } from "@/lib/client";
-import { normalizeCompanyName, normalizeEmail, normalizePersonName, normalizePhone } from "@/lib/contact-rules";
+import { normalizeCompanyName, normalizeEmail, normalizePhone, normalizeUrl } from "@/lib/contact-rules";
 
 type Rule = (v: string) => { ok: true; value: string } | { ok: false; error: string };
 
@@ -53,6 +53,7 @@ type Supplier = {
   contact: string | null;
   phone: string | null;
   email: string | null;
+  link: string | null;
   leadDays: number | null;
   notes: string | null;
   active: boolean;
@@ -61,10 +62,9 @@ type Supplier = {
 
 const body = (fd: FormData) => ({
   name: fd.get("name"),
-  contact: fd.get("contact"),
   phone: fd.get("phone"),
   email: fd.get("email"),
-  leadDays: fd.get("leadDays"),
+  link: fd.get("link"),
   notes: fd.get("notes"),
   active: fd.get("active") !== null ? fd.get("active") === "on" : true,
 });
@@ -76,27 +76,34 @@ function SupplierForm({ s }: { s?: Supplier }) {
         <RuledInput name="name" rule={normalizeCompanyName} optional={false} defaultValue={s?.name} required maxLength={80} autoFocus />
       </Field>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Contato (nome da pessoa)">
-          <RuledInput name="contact" rule={normalizePersonName} defaultValue={s?.contact ?? ""} maxLength={80} autoComplete="off" />
-        </Field>
         <Field label="Telefone / WhatsApp">
           <RuledInput
             name="phone"
             rule={normalizePhone}
+            optional={false}
+            required
             defaultValue={s?.phone ?? ""}
             maxLength={25}
             inputMode="tel"
             placeholder="(11) 98765-4321 ou +86…"
           />
         </Field>
-        <Field label="E-mail">
+        <Field label="E-mail (opcional)">
           <RuledInput name="email" rule={normalizeEmail} type="email" defaultValue={s?.email ?? ""} maxLength={120} placeholder="vendas@fornecedor.com.br" />
         </Field>
-        <Field label="Prazo de entrega (dias)">
-          <Input name="leadDays" type="number" min="0" max="365" step="1" defaultValue={s?.leadDays ?? ""} />
-        </Field>
       </div>
-      <Field label="Observações (pedido mínimo, pagamento…)">
+      <Field label="Link (opcional)">
+        <RuledInput
+          name="link"
+          rule={normalizeUrl}
+          defaultValue={s?.link ?? ""}
+          maxLength={500}
+          inputMode="url"
+          autoComplete="url"
+          placeholder="loja, site ou catálogo — ex.: fornecedor.com.br"
+        />
+      </Field>
+      <Field label="Observações (opcional: pedido mínimo, pagamento, prazo…)">
         <Textarea name="notes" defaultValue={s?.notes ?? ""} maxLength={500} />
       </Field>
       {s && (
@@ -160,6 +167,18 @@ export function SuppliersView({ suppliers }: { suppliers: Supplier[] }) {
                   <p className="flex items-center gap-2 truncate">
                     <Mail className="size-3.5" /> {s.email}
                   </p>
+                )}
+                {s.link && (
+                  <a
+                    href={s.link}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="flex min-w-0 items-center gap-2 text-primary hover:underline"
+                    title={s.link}
+                  >
+                    <ExternalLink className="size-3.5 shrink-0" />
+                    <span className="truncate">{s.link.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</span>
+                  </a>
                 )}
                 {s.notes && <p className="line-clamp-3 text-xs">{s.notes}</p>}
                 <div className="mt-1 flex flex-wrap gap-1.5">

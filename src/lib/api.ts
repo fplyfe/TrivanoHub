@@ -6,7 +6,7 @@ import { plain } from "./db";
 
 /** Nome legível dos campos nas mensagens de erro. */
 const LABELS: Record<string, string> = {
-  name: "Nome", contact: "Contato", phone: "Telefone", email: "E-mail", leadDays: "Prazo", notes: "Observações",
+  name: "Nome", contact: "Contato", phone: "Telefone", email: "E-mail", link: "Link", leadDays: "Prazo", notes: "Observações",
   sku: "SKU", cost: "Custo", price: "Preço", qty: "Quantidade", date: "Data", amount: "Valor", password: "Senha",
 };
 

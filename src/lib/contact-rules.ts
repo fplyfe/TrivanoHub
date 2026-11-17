@@ -85,3 +85,27 @@ export function normalizeCompanyName(raw: string): Result {
   if (!/^[\p{L}\p{N} &.,'\/()+-]+$/u.test(n)) return { ok: false, error: "Nome com caracteres inválidos" };
   return { ok: true, value: n };
 }
+
+/** Link do fornecedor (site, loja, catálogo): só http/https; sem esquema vira https://. */
+export function normalizeUrl(raw: string): Result {
+  let u = raw.trim();
+  if (!u) return { ok: false, error: "Informe o link" };
+  if (/\s/.test(u)) return { ok: false, error: "Link não pode ter espaços" };
+  if (u.length > 500) return { ok: false, error: "Link muito longo (máx. 500)" };
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(u) && !/^[^:]+:\d/.test(u)) return { ok: false, error: "Link deve começar com http:// ou https://" };
+    u = "https://" + u;
+  }
+  let url: URL;
+  try {
+    url = new URL(u);
+  } catch {
+    return { ok: false, error: "Link inválido, ex.: https://loja.fornecedor.com.br" };
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, error: "Link deve começar com http:// ou https://" };
+  const host = url.hostname.toLowerCase();
+  if (!/^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/.test(host) && !/^xn--/.test(host))
+    return { ok: false, error: "Link inválido: falta o domínio (ex.: fornecedor.com.br)" };
+  if (url.username || url.password) return { ok: false, error: "Link não pode ter usuário ou senha" };
+  return { ok: true, value: url.toString() };
+}

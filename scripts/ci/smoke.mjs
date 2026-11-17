@@ -10,14 +10,15 @@ const call = async (path, method, body) => {
 };
 const expect = (r, status, label) => { console.log(label, r.status, JSON.stringify(r.json).slice(0, 160)); if (r.status !== status) fail(`${label}: esperado ${status}`); };
 
-let r = await call("/api/suppliers", "POST", { name: "Fornecedor Teste", contact: "Ana 2", phone: "123", email: "ana@gmail.con", leadDays: "-3" });
+let r = await call("/api/suppliers", "POST", { name: "Fornecedor Teste", phone: "123", email: "ana@gmail.con", link: "javascript:alert(1)" });
 expect(r, 400, "inválido");
-for (const t of ["contato", "Telefone", "gmail.com", "Prazo"]) if (!String(r.json.error).includes(t)) fail("mensagem sem " + t);
-r = await call("/api/suppliers", "POST", { name: " Fornecedor  Teste ", contact: "Ana Souza", phone: "11987654321", email: "Vendas@Teste.com.br", leadDays: "10", notes: "" });
+for (const t of ["Telefone", "gmail.com", "http"]) if (!String(r.json.error).includes(t)) fail("mensagem sem " + t);
+r = await call("/api/suppliers", "POST", { name: " Fornecedor  Teste ", phone: "11987654321", email: "Vendas@Teste.com.br", link: "loja.teste.com.br/catalogo", notes: "" });
 expect(r, 200, "válido");
-if (r.json.phone !== "(11) 98765-4321" || r.json.email !== "vendas@teste.com.br" || r.json.name !== "Fornecedor Teste") fail("normalização");
+if (r.json.phone !== "(11) 98765-4321" || r.json.email !== "vendas@teste.com.br" || r.json.name !== "Fornecedor Teste" || r.json.link !== "https://loja.teste.com.br/catalogo") fail("normalização");
 const id = r.json.id;
-expect(await call("/api/suppliers", "POST", { name: "fornecedor teste" }), 409, "nome duplicado");
-expect(await call("/api/suppliers", "POST", { name: "Outro", email: "vendas@teste.com.br" }), 409, "e-mail duplicado");
-expect(await call(`/api/suppliers/${id}`, "PUT", { name: "Fornecedor Teste", phone: "+86 138 1234 5678", email: "vendas@teste.com.br", active: true }), 200, "editar mesmo registro");
+expect(await call("/api/suppliers", "POST", { name: "fornecedor teste", phone: "11987654321" }), 409, "nome duplicado");
+expect(await call("/api/suppliers", "POST", { name: "Outro", phone: "11987654321", email: "vendas@teste.com.br" }), 409, "e-mail duplicado");
+expect(await call("/api/suppliers", "POST", { name: "Sem Telefone" }), 400, "telefone obrigatório");
+expect(await call(`/api/suppliers/${id}`, "PUT", { name: "Fornecedor Teste", phone: "+86 138 1234 5678", email: "vendas@teste.com.br", link: "", active: true }), 200, "editar mesmo registro");
 console.log("Fornecedores OK");

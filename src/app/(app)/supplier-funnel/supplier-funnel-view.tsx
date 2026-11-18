@@ -350,7 +350,7 @@ export function SupplierFunnelView({ suppliers }: { suppliers: Supplier[] }) {
                   <p className="text-xs text-muted-foreground">{st.hint}</p>
                 </header>
                 {/* No computador a coluna tem a altura da tela e rola por dentro */}
-                <div className="flex flex-col gap-2 px-2 pb-2 lg:max-h-[calc(100dvh-15rem)] lg:min-h-[12rem] lg:overflow-y-auto">
+                <div className="flex max-h-[65dvh] flex-col gap-2 overflow-y-auto px-2 pb-2 lg:max-h-[calc(100dvh-15rem)] lg:min-h-[12rem]">
                   {list.length === 0 && (
                     <p className="rounded-lg border border-dashed px-1 py-6 text-center text-xs text-muted-foreground">
                       Arraste para cá
